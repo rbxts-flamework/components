@@ -1,0 +1,40 @@
+{
+  "name": "@flamework/components",
+  "version": "1.0.0",
+  "description": "",
+  "main": "out/init.lua",
+  "scripts": {
+    "prepublishOnly": "rbxtsc",
+    "build": "rbxtsc",
+    "watch": "rbxtsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "types": "out/index.d.ts",
+  "files": [
+    "out"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@rbxts/compiler-types": "^1.1.1-types.5",
+    "@rbxts/types": "^1.0.505",
+    "@typescript-eslint/eslint-plugin": "^4.28.3",
+    "@typescript-eslint/parser": "^4.28.3",
+    "eslint": "^7.31.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "eslint-plugin-roblox-ts": "^0.0.30",
+    "prettier": "^2.3.2",
+    "typescript": "^4.3.5"
+  },
+  "dependencies": {
+	"@flamework/core": "^1.0.0",
+    "@rbxts/maid": "^1.0.0-ts.1",
+    "@rbxts/services": "^1.1.5",
+    "@rbxts/t": "^2.1.4",
+    "roblox-ts": "^1.2.3"
+  }
+}

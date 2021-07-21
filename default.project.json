@@ -1,0 +1,10 @@
+{
+	"name": "components",
+	"globIgnorePaths": [
+		"**/package.json",
+		"**/tsconfig.json"
+	],
+	"tree": {
+		"$path": "out"
+	}
+}
