@@ -35,9 +35,9 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	 */
 	public instance!: I;
 
-	setInstance(instance: I) {
+	setInstance(instance: I, attributes: unknown) {
 		this.instance = instance;
-		this.attributes = instance.GetAttributes() as never;
+		this.attributes = attributes as never;
 	}
 
 	setAttribute<T extends keyof A>(key: T, value: A[T], postfix?: boolean) {
@@ -149,7 +149,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		}
 	}
 
-	private getAttributes(ctor: Constructor) {
+	private getAttributeGuards(ctor: Constructor) {
 		const attributes = new Map<string, t.check<unknown>>();
 		const metadata = this.components.get(ctor);
 		if (metadata) {
@@ -160,7 +160,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 			}
 			const parentCtor = getmetatable(ctor) as { __index?: Constructor };
 			if (parentCtor.__index !== undefined) {
-				for (const [attribute, guard] of this.getAttributes(parentCtor.__index as Constructor)) {
+				for (const [attribute, guard] of this.getAttributeGuards(parentCtor.__index as Constructor)) {
 					if (!attributes.has(attribute)) {
 						attributes.set(attribute, guard);
 					}
@@ -168,6 +168,27 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 			}
 		}
 		return attributes;
+	}
+
+	private getAttributes(instance: Instance, componentInfo: ComponentInfo, guards: Map<string, t.check<unknown>>) {
+		const attributes = instance.GetAttributes() as Map<string, unknown>;
+		const newAttributes = new Map<string, unknown>();
+		const defaults = componentInfo.config.defaults;
+
+		for (const [key, guard] of pairs(guards)) {
+			const attribute = attributes.get(key);
+			if (!guard(attribute)) {
+				if (defaults?.[key] !== undefined) {
+					newAttributes.set(key, defaults[key]);
+				} else {
+					throw `${instance.GetFullName()} has invalid attribute '${key}' for '${componentInfo.identifier}'`;
+				}
+			} else {
+				newAttributes.set(key, attribute);
+			}
+		}
+
+		return newAttributes;
 	}
 
 	private getInstanceGuard(ctor: Constructor): t.check<unknown> | undefined {
@@ -181,19 +202,6 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 				return this.getInstanceGuard(parentCtor.__index);
 			}
 		}
-	}
-
-	private validateAttributes(instance: Instance, guards: Map<string, t.check<unknown>>) {
-		const attributes = instance.GetAttributes() as { [key: string]: unknown };
-
-		for (const [key, guard] of pairs(guards)) {
-			const attribute = attributes[key];
-			if (!guard(attribute)) {
-				return false;
-			}
-		}
-
-		return true;
 	}
 
 	private safeCall(message: string, func: () => void) {
@@ -212,8 +220,13 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		})();
 	}
 
-	private setupComponent(instance: Instance, component: BaseComponent, { config, ctor, identifier }: ComponentInfo) {
-		component.setInstance(instance);
+	private setupComponent(
+		instance: Instance,
+		attributes: Map<string, unknown>,
+		component: BaseComponent,
+		{ config, ctor, identifier }: ComponentInfo,
+	) {
+		component.setInstance(instance, attributes);
 
 		if (Flamework.implements<OnStart>(component)) {
 			const name = instance.GetFullName();
@@ -236,7 +249,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		}
 
 		if (config.refreshAttributes === undefined || config.refreshAttributes) {
-			const attributes = this.getAttributes(ctor);
+			const attributes = this.getAttributeGuards(ctor);
 			for (const [attribute, guard] of pairs(attributes)) {
 				if (typeIs(attribute, "string")) {
 					component.maid.GiveTask(
@@ -289,12 +302,8 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		const componentInfo = this.components.get(component);
 		assert(componentInfo, "Provided componentSpecifier does not exist");
 
-		const attributeGuards = this.getAttributes(component);
-		if (attributeGuards !== undefined)
-			assert(
-				this.validateAttributes(instance, attributeGuards),
-				`${instance.GetFullName()} has invalid attributes for '${componentInfo.identifier}'`,
-			);
+		const attributeGuards = this.getAttributeGuards(component);
+		const attributes = this.getAttributes(instance, componentInfo, attributeGuards);
 
 		const instanceGuard = this.getInstanceGuard(component);
 		if (instanceGuard !== undefined)
@@ -312,7 +321,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		const componentInstance = Flamework.createDependency(component) as T;
 		activeComponents.set(component, componentInstance);
 
-		this.setupComponent(instance, componentInstance, componentInfo);
+		this.setupComponent(instance, attributes, componentInstance, componentInfo);
 		return componentInstance;
 	}
 
