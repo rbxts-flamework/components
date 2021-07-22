@@ -108,7 +108,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	}
 
 	onStart() {
-		for (const [, { config, ctor }] of this.components) {
+		for (const [, { config, ctor, identifier }] of this.components) {
 			if (config.tag !== undefined) {
 				CollectionService.GetInstanceAddedSignal(config.tag).Connect((instance) => {
 					this.addComponent(instance, ctor);
@@ -117,7 +117,9 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 					this.removeComponent(instance, ctor);
 				});
 				for (const instance of CollectionService.GetTagged(config.tag)) {
-					this.safeCall(`Failed to instantiate ${instance}`, () => this.addComponent(instance, ctor));
+					this.safeCall(`Failed to instantiate '${identifier}' for ${instance}`, () =>
+						this.addComponent(instance, ctor),
+					);
 				}
 			}
 		}
@@ -126,21 +128,24 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	onTick(dt: number) {
 		for (const component of this.tick) {
 			const name = component.instance.GetFullName();
-			this.safeCall(`Component failed to tick ${name}`, () => component.onTick(dt));
+			const id = Reflect.getMetadata<string>(component, "identifier");
+			this.safeCall(`Component '${id}' failed to tick ${name}`, () => component.onTick(dt));
 		}
 	}
 
 	onRender(dt: number) {
 		for (const component of this.render) {
 			const name = component.instance.GetFullName();
-			this.safeCall(`Component failed to tick ${name}`, () => component.onRender(dt));
+			const id = Reflect.getMetadata<string>(component, "identifier");
+			this.safeCall(`Component '${id}' failed to render ${name}`, () => component.onRender(dt));
 		}
 	}
 
 	onPhysics(dt: number, time: number) {
 		for (const component of this.physics) {
 			const name = component.instance.GetFullName();
-			this.safeCall(`Component failed to tick ${name}`, () => component.onPhysics(dt, time));
+			const id = Reflect.getMetadata<string>(component, "identifier");
+			this.safeCall(`Component '${id}' failed to step ${name}`, () => component.onPhysics(dt, time));
 		}
 	}
 
@@ -207,12 +212,12 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		})();
 	}
 
-	private setupComponent(instance: Instance, component: BaseComponent, { config, ctor }: ComponentInfo) {
+	private setupComponent(instance: Instance, component: BaseComponent, { config, ctor, identifier }: ComponentInfo) {
 		component.setInstance(instance);
 
 		if (Flamework.implements<OnStart>(component)) {
 			const name = instance.GetFullName();
-			this.safeCall(`Component failed to start ${name}`, () => component.onStart());
+			this.safeCall(`Component '${identifier}' failed to start ${name}`, () => component.onStart());
 		}
 
 		if (Flamework.implements<OnRender>(component)) {
@@ -242,8 +247,9 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 							if (guard(value)) {
 								if (handlers) {
 									for (const handler of handlers) {
-										this.safeCall(`Failed to call onAttributeChanged for ${attribute}`, () =>
-											handler(value, attributes.get(attribute)),
+										this.safeCall(
+											`Component '${identifier}' failed to call onAttributeChanged for ${attribute}`,
+											() => handler(value, attributes.get(attribute)),
 										);
 									}
 								}
@@ -266,7 +272,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	getComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T;
 	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
-		assert(component, "Could not find component from specifier");
+		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		const activeComponents = this.activeComponents.get(instance);
 		if (!activeComponents) return;
@@ -278,7 +284,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	addComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T;
 	addComponent<T extends BaseComponent>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
-		assert(component, "Could not find component from specifier");
+		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		const componentInfo = this.components.get(component);
 		assert(componentInfo, "Provided componentSpecifier does not exist");
@@ -287,12 +293,15 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		if (attributeGuards !== undefined)
 			assert(
 				this.validateAttributes(instance, attributeGuards),
-				`${instance.GetFullName()} has invalid attributes for ${componentInfo.identifier}`,
+				`${instance.GetFullName()} has invalid attributes for '${componentInfo.identifier}'`,
 			);
 
 		const instanceGuard = this.getInstanceGuard(component);
 		if (instanceGuard !== undefined)
-			assert(instanceGuard(instance), `${instance.GetFullName()} did not pass instance guard check`);
+			assert(
+				instanceGuard(instance),
+				`${instance.GetFullName()} did not pass instance guard check for '${componentInfo.identifier}'`,
+			);
 
 		let activeComponents = this.activeComponents.get(instance);
 		if (!activeComponents) this.activeComponents.set(instance, (activeComponents = new Map()));
@@ -311,7 +320,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	removeComponent<T>(instance: Instance, componentSpecifier: Constructor<BaseComponent>): void;
 	removeComponent(instance: Instance, componentSpecifier?: Constructor<BaseComponent> | string) {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
-		assert(component, "Could not find component from specifier");
+		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		const activeComponents = this.activeComponents.get(instance);
 		if (!activeComponents) return;
