@@ -1,6 +1,6 @@
 {
   "name": "@flamework/components",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.0",
   "description": "",
   "main": "out/init.lua",
   "scripts": {
@@ -31,7 +31,7 @@
     "typescript": "^4.3.5"
   },
   "dependencies": {
-	"@flamework/core": "^1.0.0",
+    "@flamework/core": "^1.0.0-beta.0",
     "@rbxts/maid": "^1.0.0-ts.1",
     "@rbxts/services": "^1.1.5",
     "@rbxts/t": "^2.1.4",
