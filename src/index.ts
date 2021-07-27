@@ -1,5 +1,5 @@
 import Maid from "@rbxts/maid";
-import { CollectionService } from "@rbxts/services";
+import { CollectionService, RunService } from "@rbxts/services";
 import { t } from "@rbxts/t";
 import { Service, Controller, OnInit, Flamework, OnStart, OnTick, OnPhysics, OnRender, Reflect } from "@flamework/core";
 
@@ -110,15 +110,66 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	onStart() {
 		for (const [, { config, ctor, identifier }] of this.components) {
 			if (config.tag !== undefined) {
-				CollectionService.GetInstanceAddedSignal(config.tag).Connect((instance) => {
-					this.addComponent(instance, ctor);
-				});
+				const instanceGuard = this.getInstanceGuard(ctor);
+				const addConnections = new Map<Instance, RBXScriptConnection>();
+				const removeConnections = new Map<Instance, RBXScriptConnection>();
+
+				const setupAddedConnection = (instance: Instance) => {
+					const connection = instance.DescendantAdded.Connect(() => {
+						if (instanceGuard!(instance)) {
+							this.addComponent(instance, ctor, true);
+
+							connection.Disconnect();
+							addConnections.delete(instance);
+							setupRemovedConnection(instance);
+						}
+					});
+					addConnections.set(instance, connection);
+				};
+
+				const setupRemovedConnection = (instance: Instance) => {
+					const connection = instance.DescendantRemoving.Connect(() => {
+						// The parent does not change until the next frame, so the guard will
+						// always succeed unless we yield.
+						RunService.Heartbeat.Wait();
+
+						if (!instanceGuard!(instance)) {
+							this.removeComponent(instance, ctor);
+
+							connection.Disconnect();
+							removeConnections.delete(instance);
+							setupAddedConnection(instance);
+						}
+					});
+					removeConnections.set(instance, connection);
+				};
+
+				const instanceAdded = (instance: Instance) => {
+					if (RunService.IsServer() || !instanceGuard || instanceGuard(instance)) {
+						this.addComponent(instance, ctor, true);
+						if (RunService.IsClient()) setupRemovedConnection(instance);
+					} else {
+						setupAddedConnection(instance);
+					}
+				};
+
+				CollectionService.GetInstanceAddedSignal(config.tag).Connect(instanceAdded);
 				CollectionService.GetInstanceRemovedSignal(config.tag).Connect((instance) => {
+					const addConnection = addConnections.get(instance);
+					const removeConnection = removeConnections.get(instance);
+
+					addConnections.delete(instance);
+					removeConnections.delete(instance);
+
+					addConnection?.Disconnect();
+					removeConnection?.Disconnect();
+
 					this.removeComponent(instance, ctor);
 				});
+
 				for (const instance of CollectionService.GetTagged(config.tag)) {
 					this.safeCall(`Failed to instantiate '${identifier}' for ${instance}`, () =>
-						this.addComponent(instance, ctor),
+						instanceAdded(instance),
 					);
 				}
 			}
@@ -293,9 +344,15 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		return activeComponents.get(component);
 	}
 
+	/** @internal */
+	addComponent<T>(instance: Instance, componentSpecifier: Constructor<T>, skipInstanceCheck: true): T;
 	addComponent<T>(instance: Instance): T;
 	addComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T;
-	addComponent<T extends BaseComponent>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
+	addComponent<T extends BaseComponent>(
+		instance: Instance,
+		componentSpecifier?: Constructor<T> | string,
+		skipInstanceCheck?: boolean,
+	) {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -305,12 +362,15 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		const attributeGuards = this.getAttributeGuards(component);
 		const attributes = this.getAttributes(instance, componentInfo, attributeGuards);
 
-		const instanceGuard = this.getInstanceGuard(component);
-		if (instanceGuard !== undefined)
-			assert(
-				instanceGuard(instance),
-				`${instance.GetFullName()} did not pass instance guard check for '${componentInfo.identifier}'`,
-			);
+		if (skipInstanceCheck !== true) {
+			const instanceGuard = this.getInstanceGuard(component);
+			if (instanceGuard !== undefined) {
+				assert(
+					instanceGuard(instance),
+					`${instance.GetFullName()} did not pass instance guard check for '${componentInfo.identifier}'`,
+				);
+			}
+		}
 
 		let activeComponents = this.activeComponents.get(instance);
 		if (!activeComponents) this.activeComponents.set(instance, (activeComponents = new Map()));
