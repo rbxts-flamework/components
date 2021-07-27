@@ -145,11 +145,11 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 				};
 
 				const instanceAdded = (instance: Instance) => {
-					if (RunService.IsServer()) {
+					if (RunService.IsServer() || !instanceGuard) {
 						return this.addComponent(instance, ctor);
 					}
 
-					if (!instanceGuard || instanceGuard(instance)) {
+					if (instanceGuard(instance)) {
 						this.addComponent(instance, ctor, true);
 						setupRemovedConnection(instance);
 					} else {
