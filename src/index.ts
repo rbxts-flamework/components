@@ -83,6 +83,7 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender {
 	private components = new Map<Constructor, ComponentInfo>();
 	private activeComponents = new Map<Instance, Map<unknown, BaseComponent>>();
+	private reverseComponentsMapping = new Map<Constructor, Set<BaseComponent>>();
 
 	private tick = new Set<BaseComponent & OnTick>();
 	private physics = new Set<BaseComponent & OnPhysics>();
@@ -379,11 +380,15 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		let activeComponents = this.activeComponents.get(instance);
 		if (!activeComponents) this.activeComponents.set(instance, (activeComponents = new Map()));
 
+		let reverseMapping = this.reverseComponentsMapping.get(component);
+		if (!reverseMapping) this.reverseComponentsMapping.set(component, (reverseMapping = new Set()));
+
 		const existingComponent = activeComponents.get(component);
 		if (existingComponent !== undefined) return existingComponent;
 
 		const componentInstance = Flamework.createDependency(component) as T;
 		activeComponents.set(component, componentInstance);
+		reverseMapping.add(componentInstance);
 
 		this.setupComponent(instance, attributes, componentInstance, componentInfo);
 		return componentInstance;
@@ -401,11 +406,26 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		const existingComponent = activeComponents.get(component);
 		if (!existingComponent) return;
 
+		const reverseMapping = this.reverseComponentsMapping.get(component);
+		if (reverseMapping) reverseMapping.delete(existingComponent);
+
 		existingComponent.destroy();
 		activeComponents.delete(component);
 
 		if (activeComponents.size() === 0) {
 			this.activeComponents.delete(instance);
 		}
+	}
+
+	getAllComponents<T>(): T[];
+	getAllComponents<T>(componentSpecifier: Constructor<T>): T[];
+	getAllComponents<T>(componentSpecifier?: Constructor<T> | string): T[] {
+		const component = this.getComponentFromSpecifier(componentSpecifier);
+		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
+
+		const reverseMapping = this.reverseComponentsMapping.get(component);
+		if (!reverseMapping) return [];
+
+		return [...reverseMapping] as never;
 	}
 }
