@@ -261,7 +261,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	}
 
 	private safeCall(message: string, func: () => void) {
-		coroutine.wrap(() => {
+		task.spawn(() => {
 			xpcall(func, (err) => {
 				if (typeIs(err, "string")) {
 					const stack = debug.traceback(err, 2);
@@ -273,7 +273,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 					warn(debug.traceback(undefined, 2));
 				}
 			});
-		})();
+		});
 	}
 
 	private setupComponent(
