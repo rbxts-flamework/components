@@ -2,6 +2,7 @@ import Maid from "@rbxts/maid";
 import { CollectionService, RunService } from "@rbxts/services";
 import { t } from "@rbxts/t";
 import { Service, Controller, OnInit, Flamework, OnStart, OnTick, OnPhysics, OnRender, Reflect } from "@flamework/core";
+import { ComponentConfig, ConfigType } from "@flamework/core/out/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ClassDecorator = (ctor: any) => any;
@@ -10,13 +11,13 @@ type Constructor<T = unknown> = new (...args: never[]) => T;
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
 	identifier: string;
-	config: Flamework.ConfigType<"Component">;
+	config: ConfigType<"Component">;
 }
 
 /**
  * Register a class as a Component.
  */
-export declare function Component(opts?: Flamework.ComponentConfig): ClassDecorator;
+export declare function Component(opts?: ComponentConfig): ClassDecorator;
 
 export class BaseComponent<A = {}, I extends Instance = Instance> {
 	/**
@@ -92,7 +93,7 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
 		for (const [ctor, identifier] of Reflect.objToId) {
-			const component = Reflect.getOwnMetadata<Flamework.ConfigType<"Component">>(
+			const component = Reflect.getOwnMetadata<ConfigType<"Component">>(
 				ctor,
 				`flamework:decorators.${Flamework.id<typeof Component>()}`,
 			);
