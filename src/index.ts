@@ -337,8 +337,8 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 			: componentSpecifier;
 	}
 
-	getComponent<T>(instance: Instance): T;
-	getComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T;
+	getComponent<T>(instance: Instance): T | undefined;
+	getComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T | undefined;
 	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
