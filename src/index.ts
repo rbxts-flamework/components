@@ -1,22 +1,20 @@
 import Maid from "@rbxts/maid";
 import { CollectionService, RunService } from "@rbxts/services";
 import { t } from "@rbxts/t";
-import { Service, Controller, OnInit, Flamework, OnStart, OnTick, OnPhysics, OnRender, Reflect } from "@flamework/core";
+import { Service, Controller, OnInit, Flamework, OnStart, Reflect, Modding } from "@flamework/core";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ClassDecorator = (ctor: any) => any;
 type Constructor<T = unknown> = new (...args: never[]) => T;
 
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
 	identifier: string;
-	config: Flamework.ConfigType<"Component">;
+	config: Flamework.ComponentConfig;
 }
 
 /**
  * Register a class as a Component.
  */
-export declare function Component(opts?: Flamework.ComponentConfig): ClassDecorator;
+export const Component = Modding.createMetaDecorator<[opts?: Flamework.ComponentConfig]>("Class");
 
 export class BaseComponent<A = {}, I extends Instance = Instance> {
 	/**
@@ -80,30 +78,23 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 @Controller({
 	loadOrder: 0,
 })
-export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender {
+export class Components implements OnInit, OnStart {
 	private components = new Map<Constructor, ComponentInfo>();
 	private activeComponents = new Map<Instance, Map<unknown, BaseComponent>>();
 	private reverseComponentsMapping = new Map<Constructor, Set<BaseComponent>>();
 
-	private tick = new Set<BaseComponent & OnTick>();
-	private physics = new Set<BaseComponent & OnPhysics>();
-	private render = new Set<BaseComponent & OnRender>();
-
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
-		for (const [ctor, identifier] of Reflect.objToId) {
-			const component = Reflect.getOwnMetadata<Flamework.ConfigType<"Component">>(
-				ctor,
-				`flamework:decorators.${Flamework.id<typeof Component>()}`,
-			);
-
-			if (component) {
-				components.set(ctor as Constructor, {
-					ctor: ctor as Constructor<BaseComponent>,
-					config: component,
-					identifier,
-				});
-			}
+		const componentConstructors = Modding.getDecorators<[Flamework.ComponentConfig?]>(
+			Flamework.id<typeof Component>(),
+		);
+		for (const { object: ctor, arguments: args } of componentConstructors) {
+			const identifier = Reflect.getMetadata<string>(ctor, "identifier")!;
+			components.set(ctor as Constructor, {
+				ctor: ctor as Constructor<BaseComponent>,
+				config: args[0] || {},
+				identifier,
+			});
 		}
 		this.components = components;
 	}
@@ -178,30 +169,6 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 					);
 				}
 			}
-		}
-	}
-
-	onTick(dt: number) {
-		for (const component of this.tick) {
-			const name = component.instance.GetFullName();
-			const id = Reflect.getMetadata<string>(component, "identifier");
-			this.safeCall(`Component '${id}' failed to tick ${name}`, () => component.onTick(dt));
-		}
-	}
-
-	onRender(dt: number) {
-		for (const component of this.render) {
-			const name = component.instance.GetFullName();
-			const id = Reflect.getMetadata<string>(component, "identifier");
-			this.safeCall(`Component '${id}' failed to render ${name}`, () => component.onRender(dt));
-		}
-	}
-
-	onPhysics(dt: number, time: number) {
-		for (const component of this.physics) {
-			const name = component.instance.GetFullName();
-			const id = Reflect.getMetadata<string>(component, "identifier");
-			this.safeCall(`Component '${id}' failed to step ${name}`, () => component.onPhysics(dt, time));
 		}
 	}
 
@@ -289,20 +256,8 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 			this.safeCall(`Component '${identifier}' failed to start ${name}`, () => component.onStart());
 		}
 
-		if (Flamework.implements<OnRender>(component)) {
-			this.render.add(component);
-			component.maid.GiveTask(() => this.render.delete(component));
-		}
-
-		if (Flamework.implements<OnPhysics>(component)) {
-			this.physics.add(component);
-			component.maid.GiveTask(() => this.physics.delete(component));
-		}
-
-		if (Flamework.implements<OnTick>(component)) {
-			this.tick.add(component);
-			component.maid.GiveTask(() => this.tick.delete(component));
-		}
+		Modding.addListener(component);
+		component.maid.GiveTask(() => Modding.removeListener(component));
 
 		if (config.refreshAttributes === undefined || config.refreshAttributes) {
 			const attributes = this.getAttributeGuards(ctor);
