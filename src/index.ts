@@ -343,7 +343,7 @@ export class Components implements OnInit, OnStart {
 		const existingComponent = activeComponents.get(component);
 		if (existingComponent !== undefined) return existingComponent;
 
-		const componentInstance = Flamework.createDependency(component) as T;
+		const componentInstance = Modding.createDependency(component);
 		activeComponents.set(component, componentInstance);
 		reverseMapping.add(componentInstance);
 
