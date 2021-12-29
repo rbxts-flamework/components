@@ -370,10 +370,10 @@ export class Components implements OnInit, OnStart, OnTick, OnPhysics, OnRender 
 		if (skipInstanceCheck !== true) {
 			const instanceGuard = this.getInstanceGuard(component);
 			if (instanceGuard !== undefined) {
-				assert(
-					instanceGuard(instance),
-					`${instance.GetFullName()} did not pass instance guard check for '${componentInfo.identifier}'`,
-				);
+                if (instanceGuard(instance) === false) {
+                    if (componentInfo.config.suppressInstanceGuardFails === true) return
+                    throw `${instance.GetFullName()} did not pass instance guard check for '${componentInfo.identifier}`
+                }
 			}
 		}
 
