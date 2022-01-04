@@ -14,7 +14,7 @@ interface ComponentInfo {
 /**
  * Register a class as a Component.
  *
- * @metadata flamework:implements
+ * @metadata flamework:implements flamework:parameters
  */
 export const Component = Modding.createMetaDecorator<[opts?: Flamework.ComponentConfig]>("Class");
 
