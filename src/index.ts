@@ -87,9 +87,7 @@ export class Components implements OnInit, OnStart {
 
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
-		const componentConstructors = Modding.getDecorators<[Flamework.ComponentConfig?]>(
-			Flamework.id<typeof Component>(),
-		);
+		const componentConstructors = Modding.getDecorators<typeof Component>();
 		for (const { object: ctor, arguments: args } of componentConstructors) {
 			const identifier = Reflect.getMetadata<string>(ctor, "identifier")!;
 			components.set(ctor as Constructor, {
