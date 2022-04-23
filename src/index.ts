@@ -247,9 +247,11 @@ export class Components implements OnInit, OnStart {
 		instance: Instance,
 		attributes: Map<string, unknown>,
 		component: BaseComponent,
+		construct: () => void,
 		{ config, ctor, identifier }: ComponentInfo,
 	) {
 		component.setInstance(instance, attributes);
+		construct();
 
 		if (Flamework.implements<OnStart>(component)) {
 			const name = instance.GetFullName();
@@ -341,11 +343,11 @@ export class Components implements OnInit, OnStart {
 		const existingComponent = activeComponents.get(component);
 		if (existingComponent !== undefined) return existingComponent;
 
-		const componentInstance = Modding.createDependency(component);
+		const [componentInstance, construct] = Modding.createDeferredDependency(component);
 		activeComponents.set(component, componentInstance);
 		reverseMapping.add(componentInstance);
 
-		this.setupComponent(instance, attributes, componentInstance, componentInfo);
+		this.setupComponent(instance, attributes, componentInstance, construct, componentInfo);
 		return componentInstance;
 	}
 
