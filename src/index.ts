@@ -82,7 +82,10 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 })
 export class Components implements OnInit, OnStart {
 	private components = new Map<Constructor, ComponentInfo>();
+	private classParentCache = new Map<Constructor, Constructor>();
+
 	private activeComponents = new Map<Instance, Map<unknown, BaseComponent>>();
+	private activeInheritedComponents = new Map<Instance, Map<Constructor, Set<BaseComponent>>>();
 	private reverseComponentsMapping = new Map<Constructor, Set<BaseComponent>>();
 
 	onInit() {
@@ -170,6 +173,29 @@ export class Components implements OnInit, OnStart {
 				}
 			}
 		}
+	}
+
+	private getParentConstructor(ctor: Constructor) {
+		const cache = this.classParentCache.get(ctor);
+		if (cache !== undefined) return cache;
+
+		const metatable = getmetatable(ctor) as { __index?: object };
+		if (metatable && typeIs(metatable, "table")) {
+			const parentConstructor = rawget(metatable, "__index") as Constructor;
+			this.classParentCache.set(ctor, parentConstructor);
+			return parentConstructor;
+		}
+	}
+
+	private getOrderedParents(ctor: Constructor, omitBaseComponent = true) {
+		const classes = [ctor];
+		let nextParent: Constructor | undefined = ctor;
+		while ((nextParent = this.getParentConstructor(nextParent)) !== undefined) {
+			if (!omitBaseComponent || nextParent !== BaseComponent) {
+				classes.unshift(nextParent);
+			}
+		}
+		return classes;
 	}
 
 	private getAttributeGuards(ctor: Constructor) {
@@ -306,6 +332,21 @@ export class Components implements OnInit, OnStart {
 		return activeComponents.get(component);
 	}
 
+	getComponents<T>(instance: Instance): T[];
+	getComponents<T>(instance: Instance, componentSpecifier: Constructor<T>): T[];
+	getComponents<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T[] {
+		const component = this.getComponentFromSpecifier(componentSpecifier);
+		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
+
+		const activeComponents = this.activeInheritedComponents.get(instance);
+		if (!activeComponents) return [];
+
+		const componentsSet = activeComponents.get(component);
+		if (!componentsSet) return [];
+
+		return [...componentsSet] as never;
+	}
+
 	/** @internal */
 	addComponent<T>(instance: Instance, componentSpecifier: Constructor<T>, skipInstanceCheck: true): T;
 	addComponent<T>(instance: Instance): T;
@@ -337,15 +378,25 @@ export class Components implements OnInit, OnStart {
 		let activeComponents = this.activeComponents.get(instance);
 		if (!activeComponents) this.activeComponents.set(instance, (activeComponents = new Map()));
 
-		let reverseMapping = this.reverseComponentsMapping.get(component);
-		if (!reverseMapping) this.reverseComponentsMapping.set(component, (reverseMapping = new Set()));
+		let inheritedComponents = this.activeInheritedComponents.get(instance);
+		if (!inheritedComponents) this.activeInheritedComponents.set(instance, (inheritedComponents = new Map()));
 
 		const existingComponent = activeComponents.get(component);
 		if (existingComponent !== undefined) return existingComponent;
 
 		const [componentInstance, construct] = Modding.createDeferredDependency(component);
 		activeComponents.set(component, componentInstance);
-		reverseMapping.add(componentInstance);
+
+		for (const parentClass of this.getOrderedParents(component)) {
+			let instances = inheritedComponents.get(parentClass);
+			if (!instances) inheritedComponents.set(parentClass, (instances = new Set()));
+
+			let inheritedLookup = this.reverseComponentsMapping.get(parentClass);
+			if (!inheritedLookup) this.reverseComponentsMapping.set(parentClass, (inheritedLookup = new Set()));
+
+			instances.add(componentInstance);
+			inheritedLookup.add(componentInstance);
+		}
 
 		this.setupComponent(instance, attributes, componentInstance, construct, componentInfo);
 		return componentInstance;
@@ -363,14 +414,37 @@ export class Components implements OnInit, OnStart {
 		const existingComponent = activeComponents.get(component);
 		if (!existingComponent) return;
 
-		const reverseMapping = this.reverseComponentsMapping.get(component);
-		if (reverseMapping) reverseMapping.delete(existingComponent);
+		const inheritedComponents = this.activeInheritedComponents.get(instance);
+		if (!inheritedComponents) return;
 
 		existingComponent.destroy();
 		activeComponents.delete(component);
 
+		for (const parentClass of this.getOrderedParents(component)) {
+			let instances = inheritedComponents.get(parentClass);
+			if (!instances) inheritedComponents.set(parentClass, (instances = new Set()));
+
+			let inheritedLookup = this.reverseComponentsMapping.get(parentClass);
+			if (!inheritedLookup) this.reverseComponentsMapping.set(parentClass, (inheritedLookup = new Set()));
+
+			instances.delete(existingComponent);
+			inheritedLookup.delete(existingComponent);
+
+			if (inheritedLookup.size() === 0) {
+				this.reverseComponentsMapping.delete(parentClass);
+			}
+
+			if (instances.size() === 0) {
+				inheritedComponents.delete(parentClass);
+			}
+		}
+
 		if (activeComponents.size() === 0) {
 			this.activeComponents.delete(instance);
+		}
+
+		if (inheritedComponents.size() === 0) {
+			this.activeInheritedComponents.delete(instance);
 		}
 	}
 
