@@ -82,11 +82,11 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 })
 export class Components implements OnInit, OnStart {
 	private components = new Map<Constructor, ComponentInfo>();
-	private classParentCache = new Map<Constructor, Constructor>();
+	private classParentCache = new Map<Constructor, readonly Constructor[]>();
 
 	private activeComponents = new Map<Instance, Map<unknown, BaseComponent>>();
-	private activeInheritedComponents = new Map<Instance, Map<Constructor, Set<BaseComponent>>>();
-	private reverseComponentsMapping = new Map<Constructor, Set<BaseComponent>>();
+	private activeInheritedComponents = new Map<Instance, Map<string, Set<BaseComponent>>>();
+	private reverseComponentsMapping = new Map<string, Set<BaseComponent>>();
 
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
@@ -176,25 +176,26 @@ export class Components implements OnInit, OnStart {
 	}
 
 	private getParentConstructor(ctor: Constructor) {
-		const cache = this.classParentCache.get(ctor);
-		if (cache !== undefined) return cache;
-
 		const metatable = getmetatable(ctor) as { __index?: object };
 		if (metatable && typeIs(metatable, "table")) {
 			const parentConstructor = rawget(metatable, "__index") as Constructor;
-			this.classParentCache.set(ctor, parentConstructor);
 			return parentConstructor;
 		}
 	}
 
 	private getOrderedParents(ctor: Constructor, omitBaseComponent = true) {
+		const cache = this.classParentCache.get(ctor);
+		if (cache) return cache;
+
 		const classes = [ctor];
 		let nextParent: Constructor | undefined = ctor;
 		while ((nextParent = this.getParentConstructor(nextParent)) !== undefined) {
 			if (!omitBaseComponent || nextParent !== BaseComponent) {
-				classes.unshift(nextParent);
+				classes.push(nextParent);
 			}
 		}
+
+		this.classParentCache.set(ctor, classes);
 		return classes;
 	}
 
@@ -320,6 +321,51 @@ export class Components implements OnInit, OnStart {
 			: componentSpecifier;
 	}
 
+	private getIdFromSpecifier<T extends Constructor>(componentSpecifier?: T | string) {
+		if (componentSpecifier !== undefined) {
+			return typeIs(componentSpecifier, "string")
+				? componentSpecifier
+				: Reflect.getMetadata<string>(componentSpecifier, "identifier");
+		}
+	}
+
+	private addIdMapping(value: BaseComponent, id: string, inheritedComponents: Map<string, Set<BaseComponent>>) {
+		let instances = inheritedComponents.get(id);
+		if (!instances) inheritedComponents.set(id, (instances = new Set()));
+
+		let inheritedLookup = this.reverseComponentsMapping.get(id);
+		if (!inheritedLookup) this.reverseComponentsMapping.set(id, (inheritedLookup = new Set()));
+
+		instances.add(value);
+		inheritedLookup.add(value);
+	}
+
+	private removeIdMapping(instance: Instance, value: BaseComponent, id: string) {
+		const inheritedComponents = this.activeInheritedComponents.get(instance);
+		if (!inheritedComponents) return;
+
+		const instances = inheritedComponents.get(id);
+		if (!instances) return;
+
+		const inheritedLookup = this.reverseComponentsMapping.get(id);
+		if (!inheritedLookup) return;
+
+		instances.delete(value);
+		inheritedLookup.delete(value);
+
+		if (inheritedLookup.size() === 0) {
+			this.reverseComponentsMapping.delete(id);
+		}
+
+		if (instances.size() === 0) {
+			inheritedComponents.delete(id);
+		}
+
+		if (inheritedComponents.size() === 0) {
+			this.activeInheritedComponents.delete(instance);
+		}
+	}
+
 	getComponent<T>(instance: Instance): T | undefined;
 	getComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T | undefined;
 	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
@@ -335,13 +381,13 @@ export class Components implements OnInit, OnStart {
 	getComponents<T>(instance: Instance): T[];
 	getComponents<T>(instance: Instance, componentSpecifier: Constructor<T>): T[];
 	getComponents<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T[] {
-		const component = this.getComponentFromSpecifier(componentSpecifier);
-		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
+		const componentIdentifier = this.getIdFromSpecifier(componentSpecifier);
+		if (componentIdentifier === undefined) return [];
 
 		const activeComponents = this.activeInheritedComponents.get(instance);
 		if (!activeComponents) return [];
 
-		const componentsSet = activeComponents.get(component);
+		const componentsSet = activeComponents.get(componentIdentifier);
 		if (!componentsSet) return [];
 
 		return [...componentsSet] as never;
@@ -388,14 +434,17 @@ export class Components implements OnInit, OnStart {
 		activeComponents.set(component, componentInstance);
 
 		for (const parentClass of this.getOrderedParents(component)) {
-			let instances = inheritedComponents.get(parentClass);
-			if (!instances) inheritedComponents.set(parentClass, (instances = new Set()));
+			const parentId = Reflect.getOwnMetadata<string>(parentClass, "identifier");
+			if (parentId === undefined) continue;
 
-			let inheritedLookup = this.reverseComponentsMapping.get(parentClass);
-			if (!inheritedLookup) this.reverseComponentsMapping.set(parentClass, (inheritedLookup = new Set()));
+			this.addIdMapping(componentInstance, parentId, inheritedComponents);
+		}
 
-			instances.add(componentInstance);
-			inheritedLookup.add(componentInstance);
+		const implementedList = Reflect.getMetadatas<string[]>(component, "flamework:implements");
+		for (const implemented of implementedList) {
+			for (const id of implemented) {
+				this.addIdMapping(componentInstance, id, inheritedComponents);
+			}
 		}
 
 		this.setupComponent(instance, attributes, componentInstance, construct, componentInfo);
@@ -414,47 +463,35 @@ export class Components implements OnInit, OnStart {
 		const existingComponent = activeComponents.get(component);
 		if (!existingComponent) return;
 
-		const inheritedComponents = this.activeInheritedComponents.get(instance);
-		if (!inheritedComponents) return;
-
 		existingComponent.destroy();
 		activeComponents.delete(component);
 
 		for (const parentClass of this.getOrderedParents(component)) {
-			let instances = inheritedComponents.get(parentClass);
-			if (!instances) inheritedComponents.set(parentClass, (instances = new Set()));
+			const parentId = Reflect.getOwnMetadata<string>(parentClass, "identifier");
+			if (parentId === undefined) continue;
 
-			let inheritedLookup = this.reverseComponentsMapping.get(parentClass);
-			if (!inheritedLookup) this.reverseComponentsMapping.set(parentClass, (inheritedLookup = new Set()));
+			this.removeIdMapping(instance, existingComponent, parentId);
+		}
 
-			instances.delete(existingComponent);
-			inheritedLookup.delete(existingComponent);
-
-			if (inheritedLookup.size() === 0) {
-				this.reverseComponentsMapping.delete(parentClass);
-			}
-
-			if (instances.size() === 0) {
-				inheritedComponents.delete(parentClass);
+		const implementedList = Reflect.getMetadatas<string[]>(component, "flamework:implements");
+		for (const implemented of implementedList) {
+			for (const id of implemented) {
+				this.removeIdMapping(instance, existingComponent, id);
 			}
 		}
 
 		if (activeComponents.size() === 0) {
 			this.activeComponents.delete(instance);
 		}
-
-		if (inheritedComponents.size() === 0) {
-			this.activeInheritedComponents.delete(instance);
-		}
 	}
 
 	getAllComponents<T>(): T[];
-	getAllComponents<T>(componentSpecifier: Constructor<T>): T[];
+	getAllComponents<T>(componentSpecifier: Constructor<T> | string): T[];
 	getAllComponents<T>(componentSpecifier?: Constructor<T> | string): T[] {
-		const component = this.getComponentFromSpecifier(componentSpecifier);
-		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
+		const componentIdentifier = this.getIdFromSpecifier(componentSpecifier);
+		if (componentIdentifier === undefined) return [];
 
-		const reverseMapping = this.reverseComponentsMapping.get(component);
+		const reverseMapping = this.reverseComponentsMapping.get(componentIdentifier);
 		if (!reverseMapping) return [];
 
 		return [...reverseMapping] as never;
