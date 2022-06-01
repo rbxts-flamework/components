@@ -367,7 +367,7 @@ export class Components implements OnInit, OnStart {
 	}
 
 	getComponent<T>(instance: Instance): T | undefined;
-	getComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T | undefined;
+	getComponent<T>(instance: Instance, componentSpecifier: Constructor<T> | string): T | undefined;
 	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
@@ -379,7 +379,7 @@ export class Components implements OnInit, OnStart {
 	}
 
 	getComponents<T>(instance: Instance): T[];
-	getComponents<T>(instance: Instance, componentSpecifier: Constructor<T>): T[];
+	getComponents<T>(instance: Instance, componentSpecifier: Constructor<T> | string): T[];
 	getComponents<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T[] {
 		const componentIdentifier = this.getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
@@ -396,7 +396,7 @@ export class Components implements OnInit, OnStart {
 	/** @internal */
 	addComponent<T>(instance: Instance, componentSpecifier: Constructor<T>, skipInstanceCheck: true): T;
 	addComponent<T>(instance: Instance): T;
-	addComponent<T>(instance: Instance, componentSpecifier: Constructor<T>): T;
+	addComponent<T>(instance: Instance, componentSpecifier: Constructor<T> | string): T;
 	addComponent<T extends BaseComponent>(
 		instance: Instance,
 		componentSpecifier?: Constructor<T> | string,
@@ -452,7 +452,7 @@ export class Components implements OnInit, OnStart {
 	}
 
 	removeComponent<T>(instance: Instance): void;
-	removeComponent<T>(instance: Instance, componentSpecifier: Constructor<BaseComponent>): void;
+	removeComponent<T>(instance: Instance, componentSpecifier: Constructor<BaseComponent> | string): void;
 	removeComponent(instance: Instance, componentSpecifier?: Constructor<BaseComponent> | string) {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
