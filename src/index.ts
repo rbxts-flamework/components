@@ -230,6 +230,7 @@ export class Components implements OnInit, OnStart {
 			if (!guard(attribute)) {
 				if (defaults?.[key] !== undefined) {
 					newAttributes.set(key, defaults[key]);
+					instance.SetAttribute(key, defaults[key]);
 				} else {
 					throw `${instance.GetFullName()} has invalid attribute '${key}' for '${componentInfo.identifier}'`;
 				}
