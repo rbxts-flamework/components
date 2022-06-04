@@ -290,8 +290,9 @@ export class Components implements OnInit, OnStart {
 		component.maid.GiveTask(() => Modding.removeListener(component));
 
 		if (config.refreshAttributes === undefined || config.refreshAttributes) {
-			const attributes = this.getAttributeGuards(ctor);
-			for (const [attribute, guard] of pairs(attributes)) {
+			const attributeCache = table.clone(attributes);
+			const attributeGuards = this.getAttributeGuards(ctor);
+			for (const [attribute, guard] of pairs(attributeGuards)) {
 				if (typeIs(attribute, "string")) {
 					component.maid.GiveTask(
 						instance.GetAttributeChangedSignal(attribute).Connect(() => {
@@ -303,11 +304,12 @@ export class Components implements OnInit, OnStart {
 									for (const handler of handlers) {
 										this.safeCall(
 											`Component '${identifier}' failed to call onAttributeChanged for ${attribute}`,
-											() => handler(value, attributes.get(attribute)),
+											() => handler(value, attributeCache.get(attribute)),
 										);
 									}
 								}
 								attributes.set(attribute, value);
+								attributeCache.set(attribute, value);
 							}
 						}),
 					);
