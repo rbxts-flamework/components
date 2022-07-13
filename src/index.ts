@@ -16,6 +16,7 @@ export interface ComponentConfig {
 	attributes?: { [key: string]: t.check<unknown> };
 	defaults?: { [key: string]: unknown };
 	instanceGuard?: t.check<unknown>;
+	predicate?: (instance: Instance) => boolean;
 	refreshAttributes?: boolean;
 }
 
@@ -114,6 +115,7 @@ export class Components implements OnInit, OnStart {
 		for (const [, { config, ctor, identifier }] of this.components) {
 			if (config.tag !== undefined) {
 				const instanceGuard = this.getInstanceGuard(ctor);
+				const predicate = this.getPredicate(ctor);
 				const addConnections = new Map<Instance, RBXScriptConnection>();
 				const removeConnections = new Map<Instance, RBXScriptConnection>();
 
@@ -148,6 +150,10 @@ export class Components implements OnInit, OnStart {
 				};
 
 				const instanceAdded = (instance: Instance) => {
+					if (predicate !== undefined && !predicate(instance)) {
+						return;
+					}
+
 					if (RunService.IsServer() || !instanceGuard) {
 						return this.addComponent(instance, ctor);
 					}
@@ -259,6 +265,19 @@ export class Components implements OnInit, OnStart {
 			const parentCtor = getmetatable(ctor) as { __index?: Constructor };
 			if (parentCtor.__index !== undefined) {
 				return this.getInstanceGuard(parentCtor.__index);
+			}
+		}
+	}
+
+	private getPredicate(ctor: Constructor): ComponentConfig["predicate"] {
+		const metadata = this.components.get(ctor);
+		if (metadata) {
+			if (metadata.config.predicate !== undefined) {
+				return metadata.config.predicate;
+			}
+			const parentCtor = getmetatable(ctor) as { __index?: Constructor };
+			if (parentCtor.__index !== undefined) {
+				return this.getPredicate(parentCtor.__index);
 			}
 		}
 	}
