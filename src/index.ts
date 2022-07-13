@@ -114,8 +114,8 @@ export class Components implements OnInit, OnStart {
 	onStart() {
 		for (const [, { config, ctor, identifier }] of this.components) {
 			if (config.tag !== undefined) {
-				const instanceGuard = this.getInstanceGuard(ctor);
-				const predicate = this.getPredicate(ctor);
+				const instanceGuard = this.getConfigValue(ctor, "instanceGuard");
+				const predicate = this.getConfigValue(ctor, "predicate");
 				const addConnections = new Map<Instance, RBXScriptConnection>();
 				const removeConnections = new Map<Instance, RBXScriptConnection>();
 
@@ -256,28 +256,15 @@ export class Components implements OnInit, OnStart {
 		return newAttributes;
 	}
 
-	private getInstanceGuard(ctor: Constructor): t.check<unknown> | undefined {
+	private getConfigValue<T extends keyof ComponentConfig>(ctor: Constructor, key: T): ComponentConfig[T] {
 		const metadata = this.components.get(ctor);
 		if (metadata) {
-			if (metadata.config.instanceGuard !== undefined) {
-				return metadata.config.instanceGuard;
+			if (metadata.config[key] !== undefined) {
+				return metadata.config[key];
 			}
 			const parentCtor = getmetatable(ctor) as { __index?: Constructor };
 			if (parentCtor.__index !== undefined) {
-				return this.getInstanceGuard(parentCtor.__index);
-			}
-		}
-	}
-
-	private getPredicate(ctor: Constructor): ComponentConfig["predicate"] {
-		const metadata = this.components.get(ctor);
-		if (metadata) {
-			if (metadata.config.predicate !== undefined) {
-				return metadata.config.predicate;
-			}
-			const parentCtor = getmetatable(ctor) as { __index?: Constructor };
-			if (parentCtor.__index !== undefined) {
-				return this.getPredicate(parentCtor.__index);
+				return this.getConfigValue(parentCtor.__index, key);
 			}
 		}
 	}
@@ -442,7 +429,7 @@ export class Components implements OnInit, OnStart {
 		const attributes = this.getAttributes(instance, componentInfo, attributeGuards);
 
 		if (skipInstanceCheck !== true) {
-			const instanceGuard = this.getInstanceGuard(component);
+			const instanceGuard = this.getConfigValue(component, "instanceGuard");
 			if (instanceGuard !== undefined) {
 				assert(
 					instanceGuard(instance),
