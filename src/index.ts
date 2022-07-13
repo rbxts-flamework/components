@@ -8,7 +8,15 @@ type Constructor<T = unknown> = new (...args: never[]) => T;
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
 	identifier: string;
-	config: Flamework.ComponentConfig;
+	config: ComponentConfig;
+}
+
+export interface ComponentConfig {
+	tag?: string;
+	attributes?: { [key: string]: t.check<unknown> };
+	defaults?: { [key: string]: unknown };
+	instanceGuard?: t.check<unknown>;
+	refreshAttributes?: boolean;
 }
 
 /**
@@ -16,7 +24,7 @@ interface ComponentInfo {
  *
  * @metadata flamework:implements flamework:parameters
  */
-export const Component = Modding.createMetaDecorator<[opts?: Flamework.ComponentConfig]>("Class");
+export const Component = Modding.createMetaDecorator<[opts?: ComponentConfig]>("Class");
 
 export class BaseComponent<A = {}, I extends Instance = Instance> {
 	/**
