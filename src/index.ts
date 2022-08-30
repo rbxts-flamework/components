@@ -2,6 +2,7 @@ import Maid from "@rbxts/maid";
 import { CollectionService, RunService } from "@rbxts/services";
 import { t } from "@rbxts/t";
 import { Service, Controller, OnInit, Flamework, OnStart, Reflect, Modding } from "@flamework/core";
+import Signal from "@rbxts/signal";
 
 type Constructor<T = unknown> = new (...args: never[]) => T;
 
@@ -57,7 +58,7 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	}
 
 	/** @hidden */
-	public _attributeChangeHandlers = new Map<string, ((...args: unknown[]) => void)[]>();
+	public _attributeChangeHandlers = new Map<string, Signal<(newValue: unknown, oldValue: unknown) => void>>();
 
 	/**
 	 * Connect a callback to the change of a specific attribute.
@@ -66,9 +67,9 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	 */
 	onAttributeChanged<K extends keyof A>(name: K, cb: (newValue: A[K], oldValue: A[K]) => void) {
 		let list = this._attributeChangeHandlers.get(name as string);
-		if (!list) this._attributeChangeHandlers.set(name as string, (list = []));
+		if (!list) this._attributeChangeHandlers.set(name as string, (list = new Signal()));
 
-		list.push(cb as never);
+		return list.Connect(cb as never);
 	}
 
 	/**
@@ -310,18 +311,11 @@ export class Components implements OnInit, OnStart {
 				if (typeIs(attribute, "string")) {
 					component.maid.GiveTask(
 						instance.GetAttributeChangedSignal(attribute).Connect(() => {
-							const handlers = component._attributeChangeHandlers.get(attribute);
+							const signal = component._attributeChangeHandlers.get(attribute);
 							const value = instance.GetAttribute(attribute);
 							const attributes = component.attributes as Map<string, unknown>;
 							if (guard(value)) {
-								if (handlers) {
-									for (const handler of handlers) {
-										this.safeCall(
-											`Component '${identifier}' failed to call onAttributeChanged for ${attribute}`,
-											() => handler(value, attributeCache.get(attribute)),
-										);
-									}
-								}
+								signal?.Fire(value, attributeCache.get(attribute));
 								attributes.set(attribute, value);
 								attributeCache.set(attribute, value);
 							}
