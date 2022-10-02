@@ -77,6 +77,9 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	 */
 	destroy() {
 		this.maid.Destroy();
+		for (const [, changeHandler] of this._attributeChangeHandlers) {
+			changeHandler.Destroy();
+		}
 	}
 }
 
