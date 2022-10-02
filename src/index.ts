@@ -53,7 +53,7 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	setAttribute<T extends keyof A>(key: T, value: A[T], postfix?: boolean) {
 		const previousValue = this.attributes[key];
 		this.attributes[key] = value;
-		this.instance.SetAttribute(key as string, value);
+		this.instance.SetAttribute(key as string, value as never);
 		return postfix ? previousValue : value;
 	}
 
@@ -248,7 +248,7 @@ export class Components implements OnInit, OnStart {
 			if (!guard(attribute)) {
 				if (defaults?.[key] !== undefined) {
 					newAttributes.set(key, defaults[key]);
-					instance.SetAttribute(key, defaults[key]);
+					instance.SetAttribute(key, defaults[key] as never);
 				} else {
 					throw `${instance.GetFullName()} has invalid attribute '${key}' for '${componentInfo.identifier}'`;
 				}
