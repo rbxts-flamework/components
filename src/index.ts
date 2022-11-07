@@ -3,11 +3,13 @@ import { CollectionService, RunService } from "@rbxts/services";
 import { t } from "@rbxts/t";
 import { Service, Controller, OnInit, Flamework, OnStart, Reflect, Modding } from "@flamework/core";
 import Signal from "@rbxts/signal";
+import { ComponentTracker } from "./componentTracker";
 
 type Constructor<T = unknown> = new (...args: never[]) => T;
 
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
+	componentDependencies: Constructor[];
 	identifier: string;
 	config: ComponentConfig;
 }
@@ -101,14 +103,30 @@ export class Components implements OnInit, OnStart {
 	private activeInheritedComponents = new Map<Instance, Map<string, Set<BaseComponent>>>();
 	private reverseComponentsMapping = new Map<string, Set<BaseComponent>>();
 
+	private trackers = new Map<Constructor, ComponentTracker>();
+
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
 		const componentConstructors = Modding.getDecorators<typeof Component>();
 		for (const { object: ctor, arguments: args } of componentConstructors) {
 			const identifier = Reflect.getMetadata<string>(ctor, "identifier")!;
+
+			const componentDependencies = new Array<Constructor>();
+			const parameters = Reflect.getMetadata<string[]>(ctor, "flamework:parameters");
+			if (parameters) {
+				for (const dependency of parameters) {
+					const object = Reflect.idToObj.get(dependency);
+					if (!object) continue;
+					if (!Modding.getDecorator<typeof Component>(object)) continue;
+
+					componentDependencies.push(object as Constructor);
+				}
+			}
+
 			components.set(ctor as Constructor, {
 				ctor: ctor as Constructor<BaseComponent>,
 				config: args[0] || {},
+				componentDependencies,
 				identifier,
 			});
 		}
@@ -118,39 +136,15 @@ export class Components implements OnInit, OnStart {
 	onStart() {
 		for (const [, { config, ctor, identifier }] of this.components) {
 			if (config.tag !== undefined) {
-				const instanceGuard = this.getConfigValue(ctor, "instanceGuard");
+				const tracker = this.getComponentTracker(ctor);
 				const predicate = this.getConfigValue(ctor, "predicate");
-				const addConnections = new Map<Instance, RBXScriptConnection>();
-				const removeConnections = new Map<Instance, RBXScriptConnection>();
 
-				const setupAddedConnection = (instance: Instance) => {
-					const connection = instance.DescendantAdded.Connect(() => {
-						if (instanceGuard!(instance)) {
-							this.addComponent(instance, ctor, true);
-
-							connection.Disconnect();
-							addConnections.delete(instance);
-							setupRemovedConnection(instance);
-						}
-					});
-					addConnections.set(instance, connection);
-				};
-
-				const setupRemovedConnection = (instance: Instance) => {
-					const connection = instance.DescendantRemoving.Connect(() => {
-						// The parent does not change until the next frame, so the guard will
-						// always succeed unless we yield.
-						RunService.Heartbeat.Wait();
-
-						if (!instanceGuard!(instance)) {
-							this.removeComponent(instance, ctor);
-
-							connection.Disconnect();
-							removeConnections.delete(instance);
-							setupAddedConnection(instance);
-						}
-					});
-					removeConnections.set(instance, connection);
+				const listener = (isQualified: boolean, instance: Instance) => {
+					if (isQualified) {
+						this.addComponent(instance, ctor);
+					} else {
+						this.removeComponent(instance, ctor);
+					}
 				};
 
 				const instanceAdded = (instance: Instance) => {
@@ -158,29 +152,14 @@ export class Components implements OnInit, OnStart {
 						return;
 					}
 
-					if (RunService.IsServer() || !instanceGuard) {
-						return this.addComponent(instance, ctor);
-					}
-
-					if (instanceGuard(instance)) {
-						this.addComponent(instance, ctor, true);
-						setupRemovedConnection(instance);
-					} else {
-						setupAddedConnection(instance);
-					}
+					tracker.trackInstance(instance, listener);
+					tracker.setHasTag(instance, true);
 				};
 
 				CollectionService.GetInstanceAddedSignal(config.tag).Connect(instanceAdded);
 				CollectionService.GetInstanceRemovedSignal(config.tag).Connect((instance) => {
-					const addConnection = addConnections.get(instance);
-					const removeConnection = removeConnections.get(instance);
-
-					addConnections.delete(instance);
-					removeConnections.delete(instance);
-
-					addConnection?.Disconnect();
-					removeConnection?.Disconnect();
-
+					tracker.untrackInstance(instance, listener);
+					tracker.setHasTag(instance, false);
 					this.removeComponent(instance, ctor);
 				});
 
@@ -191,6 +170,31 @@ export class Components implements OnInit, OnStart {
 				}
 			}
 		}
+	}
+
+	private getComponentTracker(component: Constructor) {
+		const existingTracker = this.trackers.get(component);
+		if (existingTracker) return existingTracker;
+
+		const componentInfo = this.components.get(component);
+		assert(componentInfo, "Provided component does not exist");
+
+		const instanceGuard = this.getConfigValue(component, "instanceGuard");
+		const dependencies = new Array<ComponentTracker>();
+
+		for (const dependency of componentInfo.componentDependencies) {
+			dependencies.push(this.getComponentTracker(dependency));
+		}
+
+		const tracker = new ComponentTracker({
+			tag: componentInfo.config.tag,
+			typeGuard: instanceGuard,
+			typeGuardPoll: RunService.IsClient(),
+			dependencies,
+		});
+
+		this.trackers.set(component, tracker);
+		return tracker;
 	}
 
 	private getParentConstructor(ctor: Constructor) {
@@ -380,6 +384,37 @@ export class Components implements OnInit, OnStart {
 		}
 	}
 
+	private canCreateComponentEager(instance: Instance, component: Constructor) {
+		const componentInfo = this.components.get(component);
+		if (!componentInfo) return false;
+
+		const tag = componentInfo.config.tag;
+		if (tag !== undefined && CollectionService.HasTag(instance, tag)) {
+			const tracker = this.getComponentTracker(component);
+			return tracker.checkInstance(instance);
+		}
+	}
+
+	private getDependencyResolutionOptions(componentInfo: ComponentInfo, instance: Instance) {
+		if (componentInfo.componentDependencies.isEmpty()) {
+			return;
+		}
+
+		return {
+			handle: (id: string) => {
+				const ctor = Reflect.idToObj.get(id);
+				if (ctor && Modding.getDecorator<typeof Component>(ctor)) {
+					const component = this.getComponent(instance, ctor as Constructor);
+					if (component === undefined) {
+						const name = instance.GetFullName();
+						throw `Could not resolve component '${id}' while constructing '${componentInfo.identifier}' (${name})`;
+					}
+					return component;
+				}
+			},
+		};
+	}
+
 	getComponent<T>(instance: Instance): T | undefined;
 	getComponent<T>(instance: Instance, componentSpecifier: Constructor<T> | string): T | undefined;
 	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
@@ -387,9 +422,16 @@ export class Components implements OnInit, OnStart {
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		const activeComponents = this.activeComponents.get(instance);
-		if (!activeComponents) return;
+		if (activeComponents) {
+			const activeComponent = activeComponents.get(component);
+			if (activeComponent) {
+				return activeComponent;
+			}
+		}
 
-		return activeComponents.get(component);
+		if (this.canCreateComponentEager(instance, component)) {
+			return this.addComponent(instance, component);
+		}
 	}
 
 	getComponents<T>(instance: Instance): T[];
@@ -444,7 +486,8 @@ export class Components implements OnInit, OnStart {
 		const existingComponent = activeComponents.get(component);
 		if (existingComponent !== undefined) return existingComponent;
 
-		const [componentInstance, construct] = Modding.createDeferredDependency(component);
+		const resolutionOptions = this.getDependencyResolutionOptions(componentInfo, instance);
+		const [componentInstance, construct] = Modding.createDeferredDependency(component, resolutionOptions);
 		activeComponents.set(component, componentInstance);
 
 		for (const parentClass of this.getOrderedParents(component)) {
