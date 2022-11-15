@@ -141,7 +141,7 @@ export class Components implements OnInit, OnStart {
 
 				const listener = (isQualified: boolean, instance: Instance) => {
 					if (isQualified) {
-						this.addComponent(instance, ctor);
+						this.addComponent(instance, ctor, true);
 					} else {
 						this.removeComponent(instance, ctor);
 					}
@@ -430,7 +430,7 @@ export class Components implements OnInit, OnStart {
 		}
 
 		if (this.canCreateComponentEager(instance, component)) {
-			return this.addComponent(instance, component);
+			return this.addComponent(instance, component, true);
 		}
 	}
 
