@@ -63,11 +63,19 @@ export class ComponentTracker {
 					removingConnection = undefined;
 				}
 
+				let isScheduled = false;
 				addedConnection = instance.DescendantAdded.Connect(() => {
-					if (typeGuard(instance)) {
-						connectRemoving();
-						tracker.unmetCriteria.delete("typeGuard");
-						this.updateListeners(instance, tracker);
+					if (!isScheduled) {
+						isScheduled = true;
+						task.defer(() => {
+							isScheduled = false;
+
+							if (typeGuard(instance)) {
+								connectRemoving();
+								tracker.unmetCriteria.delete("typeGuard");
+								this.updateListeners(instance, tracker);
+							}
+						});
 					}
 				});
 			};
@@ -77,11 +85,19 @@ export class ComponentTracker {
 					addedConnection = undefined;
 				}
 
+				let isScheduled = false;
 				removingConnection = instance.DescendantRemoving.Connect(() => {
-					if (!typeGuard(instance)) {
-						connectAdded();
-						tracker.unmetCriteria.add("typeGuard");
-						this.updateListeners(instance, tracker);
+					if (!isScheduled) {
+						isScheduled = true;
+						task.defer(() => {
+							isScheduled = false;
+
+							if (!typeGuard(instance)) {
+								connectAdded();
+								tracker.unmetCriteria.add("typeGuard");
+								this.updateListeners(instance, tracker);
+							}
+						});
 					}
 				});
 			};
