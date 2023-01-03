@@ -245,7 +245,7 @@ export class Components implements OnInit, OnStart {
 	private getAttributes(instance: Instance, componentInfo: ComponentInfo, guards: Map<string, t.check<unknown>>) {
 		const attributes = instance.GetAttributes() as Map<string, unknown>;
 		const newAttributes = new Map<string, unknown>();
-		const defaults = componentInfo.config.defaults;
+		const defaults = this.getConfigValue(componentInfo.ctor, "defaults");
 
 		for (const [key, guard] of pairs(guards)) {
 			const attribute = attributes.get(key);
@@ -311,7 +311,8 @@ export class Components implements OnInit, OnStart {
 		Modding.addListener(component);
 		component.maid.GiveTask(() => Modding.removeListener(component));
 
-		if (config.refreshAttributes === undefined || config.refreshAttributes) {
+		const refreshAttributes = this.getConfigValue(ctor, "refreshAttributes");
+		if (refreshAttributes === undefined || refreshAttributes) {
 			const attributeCache = table.clone(attributes);
 			const attributeGuards = this.getAttributeGuards(ctor);
 			for (const [attribute, guard] of pairs(attributeGuards)) {
