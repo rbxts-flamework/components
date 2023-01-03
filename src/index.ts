@@ -164,8 +164,10 @@ export class Components implements OnInit, OnStart {
 				});
 
 				for (const instance of CollectionService.GetTagged(config.tag)) {
-					this.safeCall(`Failed to instantiate '${identifier}' for ${instance.GetFullName()}`, () =>
-						instanceAdded(instance),
+					this.safeCall(
+						`Failed to instantiate '${identifier}' for ${instance.GetFullName()}`,
+						() => instanceAdded(instance),
+						false,
 					);
 				}
 			}
@@ -277,17 +279,17 @@ export class Components implements OnInit, OnStart {
 		}
 	}
 
-	private safeCall(message: string, func: () => void) {
+	private safeCall(message: string, func: () => void, printStack = true) {
 		task.spawn(() => {
 			xpcall(func, (err) => {
-				if (typeIs(err, "string")) {
+				if (typeIs(err, "string") && printStack) {
 					const stack = debug.traceback(err, 2);
 					warn(message);
 					warn(stack);
 				} else {
 					warn(message);
 					warn(err);
-					warn(debug.traceback(undefined, 2));
+					if (printStack) warn(debug.traceback(undefined, 2));
 				}
 			});
 		});
