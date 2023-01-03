@@ -164,7 +164,7 @@ export class Components implements OnInit, OnStart {
 				});
 
 				for (const instance of CollectionService.GetTagged(config.tag)) {
-					this.safeCall(`Failed to instantiate '${identifier}' for ${instance}`, () =>
+					this.safeCall(`Failed to instantiate '${identifier}' for ${instance.GetFullName()}`, () =>
 						instanceAdded(instance),
 					);
 				}
