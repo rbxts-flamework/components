@@ -395,6 +395,12 @@ export class Components implements OnInit, OnStart {
 		const instanceWaiters = this.componentWaiters.get(instance);
 		const componentWaiters = instanceWaiters?.get(ctor);
 		if (componentWaiters) {
+			instanceWaiters!.delete(ctor);
+
+			if (instanceWaiters!.size() === 0) {
+				this.componentWaiters.delete(instance);
+			}
+
 			for (const waiter of componentWaiters) {
 				waiter(component);
 			}
@@ -659,8 +665,8 @@ export class Components implements OnInit, OnStart {
 			let componentWaiters = instanceWaiters.get(component);
 			if (!componentWaiters) instanceWaiters.set(component, (componentWaiters = new Set()));
 
-			const resolver = (value: unknown) => {
-				componentWaiters!.delete(resolver);
+			onCancel(() => {
+				componentWaiters!.delete(resolve as never);
 
 				if (componentWaiters!.size() === 0) {
 					instanceWaiters!.delete(component);
@@ -669,16 +675,9 @@ export class Components implements OnInit, OnStart {
 				if (instanceWaiters!.size() === 0) {
 					this.componentWaiters.delete(instance);
 				}
-
-				resolve(value as T);
-			};
-
-			onCancel(() => {
-				// The promise is cancelled, so the call to `resolve` is ignored and everything gets cleaned up.
-				resolver(undefined!);
 			});
 
-			componentWaiters.add(resolver);
+			componentWaiters.add(resolve as never);
 		});
 	}
 }
