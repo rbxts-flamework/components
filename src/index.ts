@@ -1,5 +1,5 @@
 import Maid from "@rbxts/maid";
-import { CollectionService, RunService } from "@rbxts/services";
+import { CollectionService, ReplicatedStorage, RunService, ServerStorage } from "@rbxts/services";
 import { t } from "@rbxts/t";
 import { Service, Controller, OnInit, Flamework, OnStart, Reflect, Modding } from "@flamework/core";
 import Signal from "@rbxts/signal";
@@ -21,7 +21,11 @@ export interface ComponentConfig {
 	instanceGuard?: t.check<unknown>;
 	predicate?: (instance: Instance) => boolean;
 	refreshAttributes?: boolean;
+	ancestorWhitelist?: Instance[];
+	ancestorBlacklist?: Instance[];
 }
+
+const DEFAULT_ANCESTOR_BLACKLIST = [ServerStorage, ReplicatedStorage];
 
 /**
  * Register a class as a Component.
@@ -135,6 +139,9 @@ export class Components implements OnInit, OnStart {
 
 	onStart() {
 		for (const [, { config, ctor, identifier }] of this.components) {
+			const ancestorBlacklist = config.ancestorBlacklist ?? DEFAULT_ANCESTOR_BLACKLIST;
+			const ancestorWhitelist = config.ancestorWhitelist;
+
 			if (config.tag !== undefined) {
 				const tracker = this.getComponentTracker(ctor);
 				const predicate = this.getConfigValue(ctor, "predicate");
@@ -151,6 +158,12 @@ export class Components implements OnInit, OnStart {
 					if (predicate !== undefined && !predicate(instance)) {
 						return;
 					}
+
+					const isWhitelisted = ancestorWhitelist?.some((ancestor) => instance.IsDescendantOf(ancestor));
+					if (isWhitelisted === false) return;
+
+					const isBlacklisted = ancestorBlacklist.some((ancestor) => instance.IsDescendantOf(ancestor));
+					if (isBlacklisted && isWhitelisted === undefined) return;
 
 					tracker.trackInstance(instance, listener);
 					tracker.setHasTag(instance, true);
