@@ -480,7 +480,7 @@ export class Components implements OnInit, OnStart {
 	 * The specified type must be exact and not a lifecycle event or superclass. If you want to
 	 * query for lifecycle events or superclasses, you should use the `getComponents` method.
 	 */
-	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
+	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T | undefined {
 		const component = this.getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -488,7 +488,7 @@ export class Components implements OnInit, OnStart {
 		if (activeComponents) {
 			const activeComponent = activeComponents.get(component);
 			if (activeComponent) {
-				return activeComponent;
+				return activeComponent as T;
 			}
 		}
 
