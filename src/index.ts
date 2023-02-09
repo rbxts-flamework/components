@@ -151,6 +151,7 @@ export class Components implements OnInit, OnStart {
 	private reverseComponentsMapping = new Map<string, Set<BaseComponent>>();
 
 	private trackers = new Map<Constructor, ComponentTracker>();
+	private componentWaiters = new Map<Instance, Map<Constructor, Set<(value: unknown) => void>>>();
 
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
@@ -390,6 +391,16 @@ export class Components implements OnInit, OnStart {
 				}
 			}
 		}
+
+		const instanceWaiters = this.componentWaiters.get(instance);
+		const componentWaiters = instanceWaiters?.get(ctor);
+		if (componentWaiters) {
+			print("calling waiters");
+			for (const waiter of componentWaiters) {
+				waiter(component);
+			}
+			print("done");
+		}
 	}
 
 	private getComponentFromSpecifier<T extends Constructor>(componentSpecifier?: T | string) {
@@ -448,7 +459,7 @@ export class Components implements OnInit, OnStart {
 		if (!componentInfo) return false;
 
 		const tag = componentInfo.config.tag;
-		if (tag !== undefined && CollectionService.HasTag(instance, tag)) {
+		if (tag !== undefined && instance.Parent && CollectionService.HasTag(instance, tag)) {
 			const tracker = this.getComponentTracker(component);
 			return tracker.checkInstance(instance);
 		}
@@ -627,5 +638,49 @@ export class Components implements OnInit, OnStart {
 		if (!reverseMapping) return [];
 
 		return [...reverseMapping] as never;
+	}
+
+	/**
+	 * This returns a promise which will fire when the specified component is added.
+	 * This will first call `getComponent` which means it can resolve instantly and will also
+	 * have the eager loading capabilities of `getComponent`.
+	 *
+	 * This only fires once and should be cancelled to avoid memory leaks if the Promise is discarded prior to being invoked.
+	 */
+	waitForComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): Promise<T> {
+		const component = this.getComponentFromSpecifier(componentSpecifier);
+		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
+
+		return new Promise((resolve, _, onCancel) => {
+			const existingComponent = this.getComponent(instance, componentSpecifier);
+			if (existingComponent !== undefined) return resolve(existingComponent);
+
+			let instanceWaiters = this.componentWaiters.get(instance);
+			if (!instanceWaiters) this.componentWaiters.set(instance, (instanceWaiters = new Map()));
+
+			let componentWaiters = instanceWaiters.get(component);
+			if (!componentWaiters) instanceWaiters.set(component, (componentWaiters = new Set()));
+
+			const resolver = (value: unknown) => {
+				componentWaiters!.delete(resolver);
+
+				if (componentWaiters!.size() === 0) {
+					instanceWaiters!.delete(component);
+				}
+
+				if (instanceWaiters!.size() === 0) {
+					this.componentWaiters.delete(instance);
+				}
+
+				resolve(value as T);
+			};
+
+			onCancel(() => {
+				// The promise is cancelled, so the call to `resolve` is ignored and everything gets cleaned up.
+				resolver(undefined!);
+			});
+
+			componentWaiters.add(resolver);
+		});
 	}
 }
