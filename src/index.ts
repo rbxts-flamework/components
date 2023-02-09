@@ -395,11 +395,9 @@ export class Components implements OnInit, OnStart {
 		const instanceWaiters = this.componentWaiters.get(instance);
 		const componentWaiters = instanceWaiters?.get(ctor);
 		if (componentWaiters) {
-			print("calling waiters");
 			for (const waiter of componentWaiters) {
 				waiter(component);
 			}
-			print("done");
 		}
 	}
 
