@@ -66,6 +66,14 @@ export interface ComponentConfig {
 	 * This has the same behavior as a predicate.
 	 */
 	ancestorBlacklist?: Instance[];
+
+	/**
+	 * Flamework will warn whenever a component isn't able to be created while watching for CollectionService tags,
+	 * this allows you to adjust how long until that warning appears.
+	 *
+	 * Defaults to 5, set to 0 to disable.
+	 */
+	warningTimeout?: number;
 }
 
 const DEFAULT_ANCESTOR_BLACKLIST = [ServerStorage, ReplicatedStorage];
@@ -245,10 +253,11 @@ export class Components implements OnInit, OnStart {
 			dependencies.push(this.getComponentTracker(dependency));
 		}
 
-		const tracker = new ComponentTracker({
+		const tracker = new ComponentTracker(componentInfo.identifier, {
 			tag: componentInfo.config.tag,
 			typeGuard: instanceGuard,
 			typeGuardPoll: RunService.IsClient(),
+			warningTimeout: componentInfo.config.warningTimeout,
 			dependencies,
 		});
 

@@ -10,6 +10,7 @@ interface InstanceTracker {
 	unmetCriteria: Set<unknown>;
 	listeners: Set<Listener>;
 	cleanup: Set<Callback>;
+	timeoutWarningThread?: thread;
 }
 
 export interface Criteria {
@@ -17,12 +18,13 @@ export interface Criteria {
 	typeGuard?: t.check<unknown>;
 	typeGuardPoll?: boolean;
 	dependencies?: ComponentTracker[];
+	warningTimeout?: number;
 }
 
 export class ComponentTracker {
 	private instances = new Map<Instance, InstanceTracker>();
 
-	constructor(private criteria: Criteria) {}
+	constructor(private identifier: string, private criteria: Criteria) {}
 
 	private getInstanceTracker(instance: Instance, create?: true): InstanceTracker;
 	private getInstanceTracker(instance: Instance, create: false): InstanceTracker | undefined;
@@ -44,8 +46,15 @@ export class ComponentTracker {
 		const isQualified = tracker.unmetCriteria.isEmpty();
 		if (isQualified !== tracker.isQualified) {
 			tracker.isQualified = isQualified;
+
 			for (const listener of tracker.listeners) {
 				listener(isQualified, instance);
+			}
+
+			const warningThread = tracker.timeoutWarningThread;
+			if (isQualified && warningThread) {
+				tracker.timeoutWarningThread = undefined;
+				task.cancel(warningThread);
 			}
 		}
 	}
@@ -72,7 +81,7 @@ export class ComponentTracker {
 
 							if (typeGuard(instance)) {
 								connectRemoving();
-								tracker.unmetCriteria.delete("typeGuard");
+								tracker.unmetCriteria.delete("type guard");
 								this.updateListeners(instance, tracker);
 							}
 						});
@@ -94,7 +103,7 @@ export class ComponentTracker {
 
 							if (!typeGuard(instance)) {
 								connectAdded();
-								tracker.unmetCriteria.add("typeGuard");
+								tracker.unmetCriteria.add("type guard");
 								this.updateListeners(instance, tracker);
 							}
 						});
@@ -107,7 +116,7 @@ export class ComponentTracker {
 				removingConnection?.Disconnect();
 			});
 
-			if (tracker.unmetCriteria.has("typeGuard")) {
+			if (tracker.unmetCriteria.has("type guard")) {
 				connectAdded();
 			} else {
 				connectRemoving();
@@ -133,6 +142,30 @@ export class ComponentTracker {
 				});
 			}
 		}
+
+		if (!tracker.isQualified && this.criteria.warningTimeout !== 0) {
+			tracker.timeoutWarningThread = task.delay(this.criteria.warningTimeout ?? 5, () => {
+				const reasons = new Array<string>();
+
+				for (const criteria of tracker.unmetCriteria) {
+					if (typeIs(criteria, "string")) {
+						reasons.push(criteria);
+					}
+				}
+
+				if (dependencies) {
+					for (const dependency of dependencies) {
+						if (tracker.unmetCriteria.has(dependency)) {
+							reasons.push(`dependency '${dependency.identifier}'`);
+						}
+					}
+				}
+
+				warn(`[Flamework] Infinite yield possible on instance '${instance.GetFullName()}'`);
+				warn(`Waiting for component '${this.identifier}'`);
+				warn(`Waiting for the following criteria: ${reasons.join(", ")}`);
+			});
+		}
 	}
 
 	private testInstance(instance: Instance, tracker?: InstanceTracker) {
@@ -155,7 +188,7 @@ export class ComponentTracker {
 			if (!this.criteria.typeGuard(instance)) {
 				result = false;
 				if (tracker) {
-					tracker.unmetCriteria.add("typeGuard");
+					tracker.unmetCriteria.add("type guard");
 					this.updateListeners(instance, tracker);
 				} else {
 					return result;
@@ -167,7 +200,7 @@ export class ComponentTracker {
 			if (!CollectionService.HasTag(instance, this.criteria.tag)) {
 				result = false;
 				if (tracker) {
-					tracker.unmetCriteria.add("tag");
+					tracker.unmetCriteria.add("CollectionService tag");
 					this.updateListeners(instance, tracker);
 				} else {
 					return result;
@@ -186,9 +219,9 @@ export class ComponentTracker {
 		const tracker = this.getInstanceTracker(instance, false);
 		if (tracker) {
 			if (hasTag) {
-				tracker.unmetCriteria.delete("tag");
+				tracker.unmetCriteria.delete("CollectionService tag");
 			} else {
-				tracker.unmetCriteria.add("tag");
+				tracker.unmetCriteria.add("CollectionService tag");
 			}
 
 			this.updateListeners(instance, tracker);
