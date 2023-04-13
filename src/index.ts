@@ -81,7 +81,7 @@ const DEFAULT_ANCESTOR_BLACKLIST = [ServerStorage, ReplicatedStorage];
 /**
  * Register a class as a Component.
  *
- * @metadata flamework:implements flamework:parameters
+ * @metadata flamework:implements flamework:parameters injectable
  */
 export const Component = Modding.createMetaDecorator<[opts?: ComponentConfig]>("Class");
 
