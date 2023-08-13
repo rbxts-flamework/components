@@ -230,7 +230,7 @@ export class Components implements OnInit, OnStart {
 
 				for (const instance of CollectionService.GetTagged(config.tag)) {
 					this.safeCall(
-						`Failed to instantiate '${identifier}' for ${instance.GetFullName()}`,
+						[`[Flamework] Failed to instantiate '${ctor}' for`, instance, `[${instance.GetFullName()}]`],
 						() => instanceAdded(instance),
 						false,
 					);
@@ -345,15 +345,15 @@ export class Components implements OnInit, OnStart {
 		}
 	}
 
-	private safeCall(message: string, func: () => void, printStack = true) {
+	private safeCall(message: unknown[], func: () => void, printStack = true) {
 		task.spawn(() => {
 			xpcall(func, (err) => {
 				if (typeIs(err, "string") && printStack) {
 					const stack = debug.traceback(err, 2);
-					warn(message);
+					warn(...message);
 					warn(stack);
 				} else {
-					warn(message);
+					warn(...message);
 					warn(err);
 					if (printStack) warn(debug.traceback(undefined, 2));
 				}
@@ -372,8 +372,10 @@ export class Components implements OnInit, OnStart {
 		construct();
 
 		if (Flamework.implements<OnStart>(component)) {
-			const name = instance.GetFullName();
-			this.safeCall(`Component '${identifier}' failed to start ${name}`, () => component.onStart());
+			this.safeCall(
+				[`[Flamework] Component '${ctor}' failed to start for`, instance, `[${instance.GetFullName()}]`],
+				() => component.onStart(),
+			);
 		}
 
 		Modding.addListener(component);
