@@ -230,7 +230,7 @@ export class Components implements OnInit, OnStart {
 
 				for (const instance of CollectionService.GetTagged(config.tag)) {
 					this.safeCall(
-						[`Failed to instantiate '${ctor}' for`, instance, `(${identifier})`],
+						[`[Flamework] Failed to instantiate '${ctor}' for`, instance, `[${instance.GetFullName()}]`],
 						() => instanceAdded(instance),
 						false,
 					);
@@ -372,8 +372,9 @@ export class Components implements OnInit, OnStart {
 		construct();
 
 		if (Flamework.implements<OnStart>(component)) {
-			this.safeCall([`Component '${ctor}' failed to start`, instance, `(${identifier})`], () =>
-				component.onStart(),
+			this.safeCall(
+				[`[Flamework] Component '${ctor}' failed to start`, instance, `[${instance.GetFullName()}]`],
+				() => component.onStart(),
 			);
 		}
 
