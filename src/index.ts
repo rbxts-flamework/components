@@ -373,7 +373,7 @@ export class Components implements OnInit, OnStart {
 
 		if (Flamework.implements<OnStart>(component)) {
 			this.safeCall(
-				[`[Flamework] Component '${ctor}' failed to start`, instance, `[${instance.GetFullName()}]`],
+				[`[Flamework] Component '${ctor}' failed to start for`, instance, `[${instance.GetFullName()}]`],
 				() => component.onStart(),
 			);
 		}
