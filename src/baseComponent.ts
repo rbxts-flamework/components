@@ -1,6 +1,11 @@
 import Maid from "@rbxts/maid";
 import Signal from "@rbxts/signal";
 
+/**
+ * This is the base component class which handles instance guards, attribute guards and cleanup.
+ *
+ * You should not construct this class manually, and all components must extend this class.
+ */
 export class BaseComponent<A = {}, I extends Instance = Instance> {
 	/**
 	 * A maid that will be destroyed when the component is.
