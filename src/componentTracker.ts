@@ -1,6 +1,4 @@
-import Maid from "@rbxts/maid";
 import { CollectionService } from "@rbxts/services";
-import Signal from "@rbxts/signal";
 import { t } from "@rbxts/t";
 
 type Listener = (isQualified: boolean, instance: Instance) => void;
