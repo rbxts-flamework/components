@@ -3,8 +3,7 @@ import { CollectionService, ReplicatedStorage, RunService, ServerStorage } from 
 import { t } from "@rbxts/t";
 import { BaseComponent } from "./baseComponent";
 import { ComponentTracker } from "./componentTracker";
-
-type Constructor<T = unknown> = new (...args: never[]) => T;
+import { Constructor, getComponentFromSpecifier, getIdFromSpecifier, getParentConstructor, safeCall } from "./utility";
 
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
@@ -173,7 +172,7 @@ export class Components implements OnInit, OnStart {
 				});
 
 				for (const instance of CollectionService.GetTagged(config.tag)) {
-					this.safeCall(
+					safeCall(
 						[`[Flamework] Failed to instantiate '${ctor}' for`, instance, `[${instance.GetFullName()}]`],
 						() => instanceAdded(instance),
 						false,
@@ -209,21 +208,13 @@ export class Components implements OnInit, OnStart {
 		return tracker;
 	}
 
-	private getParentConstructor(ctor: Constructor) {
-		const metatable = getmetatable(ctor) as { __index?: object };
-		if (metatable && typeIs(metatable, "table")) {
-			const parentConstructor = rawget(metatable, "__index") as Constructor;
-			return parentConstructor;
-		}
-	}
-
 	private getOrderedParents(ctor: Constructor, omitBaseComponent = true) {
 		const cache = this.classParentCache.get(ctor);
 		if (cache) return cache;
 
 		const classes = [ctor];
 		let nextParent: Constructor | undefined = ctor;
-		while ((nextParent = this.getParentConstructor(nextParent)) !== undefined) {
+		while ((nextParent = getParentConstructor(nextParent)) !== undefined) {
 			if (!omitBaseComponent || nextParent !== BaseComponent) {
 				classes.push(nextParent);
 			}
@@ -289,34 +280,18 @@ export class Components implements OnInit, OnStart {
 		}
 	}
 
-	private safeCall(message: unknown[], func: () => void, printStack = true) {
-		task.spawn(() => {
-			xpcall(func, (err) => {
-				if (typeIs(err, "string") && printStack) {
-					const stack = debug.traceback(err, 2);
-					warn(...message);
-					warn(stack);
-				} else {
-					warn(...message);
-					warn(err);
-					if (printStack) warn(debug.traceback(undefined, 2));
-				}
-			});
-		});
-	}
-
 	private setupComponent(
 		instance: Instance,
 		attributes: Map<string, unknown>,
 		component: BaseComponent,
 		construct: () => void,
-		{ config, ctor, identifier }: ComponentInfo,
+		{ ctor }: ComponentInfo,
 	) {
 		component.setInstance(instance, attributes);
 		construct();
 
 		if (Flamework.implements<OnStart>(component)) {
-			this.safeCall(
+			safeCall(
 				[`[Flamework] Component '${ctor}' failed to start for`, instance, `[${instance.GetFullName()}]`],
 				() => component.onStart(),
 			);
@@ -359,20 +334,6 @@ export class Components implements OnInit, OnStart {
 			for (const waiter of componentWaiters) {
 				waiter(component);
 			}
-		}
-	}
-
-	private getComponentFromSpecifier<T extends Constructor>(componentSpecifier?: T | string) {
-		return typeIs(componentSpecifier, "string")
-			? (Reflect.idToObj.get(componentSpecifier) as T)
-			: componentSpecifier;
-	}
-
-	private getIdFromSpecifier<T extends Constructor>(componentSpecifier?: T | string) {
-		if (componentSpecifier !== undefined) {
-			return typeIs(componentSpecifier, "string")
-				? componentSpecifier
-				: Reflect.getMetadata<string>(componentSpecifier, "identifier");
 		}
 	}
 
@@ -451,7 +412,7 @@ export class Components implements OnInit, OnStart {
 	 * query for lifecycle events or superclasses, you should use the `getComponents` method.
 	 */
 	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T | undefined {
-		const component = this.getComponentFromSpecifier(componentSpecifier);
+		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		const activeComponents = this.activeComponents.get(instance);
@@ -473,7 +434,7 @@ export class Components implements OnInit, OnStart {
 	 * For example, `getComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
 	 */
 	getComponents<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T[] {
-		const componentIdentifier = this.getIdFromSpecifier(componentSpecifier);
+		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
 		const activeComponents = this.activeInheritedComponents.get(instance);
@@ -498,7 +459,7 @@ export class Components implements OnInit, OnStart {
 		componentSpecifier?: Constructor<T> | string,
 		skipInstanceCheck?: boolean,
 	) {
-		const component = this.getComponentFromSpecifier(componentSpecifier);
+		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		const componentInfo = this.components.get(component);
@@ -553,7 +514,7 @@ export class Components implements OnInit, OnStart {
 	 * The specified class must be exact and cannot be a lifecycle event or superclass.
 	 */
 	removeComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
-		const component = this.getComponentFromSpecifier(componentSpecifier);
+		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		const activeComponents = this.activeComponents.get(instance);
@@ -590,7 +551,7 @@ export class Components implements OnInit, OnStart {
 	 * For example, `getAllComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
 	 */
 	getAllComponents<T>(componentSpecifier?: Constructor<T> | string): T[] {
-		const componentIdentifier = this.getIdFromSpecifier(componentSpecifier);
+		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
 		const reverseMapping = this.reverseComponentsMapping.get(componentIdentifier);
@@ -607,7 +568,7 @@ export class Components implements OnInit, OnStart {
 	 * This only fires once and should be cancelled to avoid memory leaks if the Promise is discarded prior to being invoked.
 	 */
 	waitForComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): Promise<T> {
-		const component = this.getComponentFromSpecifier(componentSpecifier);
+		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
 		return new Promise((resolve, _, onCancel) => {
