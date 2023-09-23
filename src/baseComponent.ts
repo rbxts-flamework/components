@@ -22,7 +22,7 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	 */
 	public static setInstance<A, I extends Instance>(component: BaseComponent<A, I>, instance: I, attributes: unknown) {
 		component.instance = instance;
-		component.attributes = attributes as never;
+		component.attributes = attributes as A;
 	}
 
 	/**
