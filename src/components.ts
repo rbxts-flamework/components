@@ -1,7 +1,7 @@
 import { Controller, Flamework, Modding, OnInit, OnStart, Reflect, Service } from "@flamework/core";
 import { CollectionService, ReplicatedStorage, RunService, ServerStorage } from "@rbxts/services";
 import { t } from "@rbxts/t";
-import { BaseComponent } from "./baseComponent";
+import { BaseComponent, SYMBOL_ATTRIBUTE_HANDLERS } from "./baseComponent";
 import { ComponentTracker } from "./componentTracker";
 import { Constructor, getComponentFromSpecifier, getIdFromSpecifier, getParentConstructor, safeCall } from "./utility";
 
@@ -287,7 +287,7 @@ export class Components implements OnInit, OnStart {
 		construct: () => void,
 		{ ctor }: ComponentInfo,
 	) {
-		component.setInstance(instance, attributes);
+		BaseComponent.setInstance(component, instance, attributes);
 		construct();
 
 		if (Flamework.implements<OnStart>(component)) {
@@ -308,7 +308,7 @@ export class Components implements OnInit, OnStart {
 				if (typeIs(attribute, "string")) {
 					component.maid.GiveTask(
 						instance.GetAttributeChangedSignal(attribute).Connect(() => {
-							const signal = component._attributeChangeHandlers.get(attribute);
+							const signal = component[SYMBOL_ATTRIBUTE_HANDLERS].get(attribute);
 							const value = instance.GetAttribute(attribute);
 							const attributes = component.attributes as Map<string, unknown>;
 							if (guard(value)) {
