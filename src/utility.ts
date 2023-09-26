@@ -1,7 +1,7 @@
 import { Reflect } from "@flamework/core";
 
-export type Constructor<T = unknown> = new (...args: never[]) => T;
-export type AbstractConstructor<T = unknown> = abstract new (...args: never[]) => T;
+export type Constructor<T = object> = new (...args: never[]) => T;
+export type AbstractConstructor<T = object> = abstract new (...args: never[]) => T;
 
 export function isConstructor(obj: object): obj is Constructor {
 	return "constructor" in obj && "new" in obj;

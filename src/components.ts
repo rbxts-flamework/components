@@ -422,7 +422,7 @@ export class Components implements OnInit, OnStart {
 	 * The specified type must be exact and not a lifecycle event or superclass. If you want to
 	 * query for lifecycle events or superclasses, you should use the `getComponents` method.
 	 */
-	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T | undefined {
+	getComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string): T | undefined {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -444,7 +444,7 @@ export class Components implements OnInit, OnStart {
 	 *
 	 * For example, `getComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
 	 */
-	getComponents<T>(instance: Instance, componentSpecifier?: AbstractConstructor<T> | string): T[] {
+	getComponents<T extends object>(instance: Instance, componentSpecifier?: AbstractConstructor<T> | string): T[] {
 		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
@@ -524,7 +524,7 @@ export class Components implements OnInit, OnStart {
 	 * Removes the specified component from this instance.
 	 * The specified class must be exact and cannot be a lifecycle event or superclass.
 	 */
-	removeComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
+	removeComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -561,7 +561,7 @@ export class Components implements OnInit, OnStart {
 	 *
 	 * For example, `getAllComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
 	 */
-	getAllComponents<T>(componentSpecifier?: AbstractConstructor<T> | string): T[] {
+	getAllComponents<T extends object>(componentSpecifier?: AbstractConstructor<T> | string): T[] {
 		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
@@ -578,7 +578,7 @@ export class Components implements OnInit, OnStart {
 	 *
 	 * This only fires once and should be cancelled to avoid memory leaks if the Promise is discarded prior to being invoked.
 	 */
-	waitForComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): Promise<T> {
+	waitForComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string): Promise<T> {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
