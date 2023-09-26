@@ -14,7 +14,7 @@ import {
 } from "./utility";
 
 interface ComponentInfo {
-	constructor: Constructor<BaseComponent>;
+	ctor: Constructor<BaseComponent>;
 	componentDependencies: Constructor[];
 	identifier: string;
 	config: ComponentConfig;
@@ -115,14 +115,14 @@ export class Components implements OnInit, OnStart {
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
 		const componentConstructors = Modding.getDecorators<typeof Component>();
-		for (const { constructor, arguments: args } of componentConstructors) {
-			if (constructor === undefined) {
+		for (const { constructor: ctor, arguments: args } of componentConstructors) {
+			if (ctor === undefined) {
 				continue;
 			}
 
-			const identifier = Reflect.getMetadata<string>(constructor, "identifier")!;
+			const identifier = Reflect.getMetadata<string>(ctor, "identifier")!;
 			const componentDependencies = new Array<Constructor>();
-			const parameters = Reflect.getMetadata<string[]>(constructor, "flamework:parameters");
+			const parameters = Reflect.getMetadata<string[]>(ctor, "flamework:parameters");
 			if (parameters) {
 				for (const dependency of parameters) {
 					const object = Reflect.idToObj.get(dependency);
@@ -133,8 +133,8 @@ export class Components implements OnInit, OnStart {
 				}
 			}
 
-			components.set(constructor, {
-				constructor: constructor as Constructor<BaseComponent>,
+			components.set(ctor, {
+				ctor: ctor as Constructor<BaseComponent>,
 				config: args[0] || {},
 				componentDependencies,
 				identifier,
@@ -144,7 +144,7 @@ export class Components implements OnInit, OnStart {
 	}
 
 	onStart() {
-		for (const [, { config, constructor: ctor }] of this.components) {
+		for (const [, { config, ctor }] of this.components) {
 			const ancestorBlacklist = config.ancestorBlacklist ?? DEFAULT_ANCESTOR_BLACKLIST;
 			const ancestorWhitelist = config.ancestorWhitelist;
 
@@ -259,7 +259,7 @@ export class Components implements OnInit, OnStart {
 	private getAttributes(instance: Instance, componentInfo: ComponentInfo, guards: Map<string, t.check<unknown>>) {
 		const attributes = instance.GetAttributes() as Map<string, unknown>;
 		const newAttributes = new Map<string, unknown>();
-		const defaults = this.getConfigValue(componentInfo.constructor, "defaults");
+		const defaults = this.getConfigValue(componentInfo.ctor, "defaults");
 
 		for (const [key, guard] of pairs(guards)) {
 			const attribute = attributes.get(key);
@@ -296,7 +296,7 @@ export class Components implements OnInit, OnStart {
 		attributes: Map<string, unknown>,
 		component: BaseComponent,
 		construct: () => void,
-		{ constructor: ctor }: ComponentInfo,
+		{ ctor }: ComponentInfo,
 	) {
 		BaseComponent.setInstance(component, instance, attributes);
 		construct();
