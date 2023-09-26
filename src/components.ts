@@ -3,7 +3,15 @@ import { CollectionService, ReplicatedStorage, RunService, ServerStorage } from 
 import { t } from "@rbxts/t";
 import { BaseComponent, SYMBOL_ATTRIBUTE_HANDLERS } from "./baseComponent";
 import { ComponentTracker } from "./componentTracker";
-import { Constructor, getComponentFromSpecifier, getIdFromSpecifier, getParentConstructor, safeCall } from "./utility";
+import {
+	AbstractConstructor,
+	Constructor,
+	getComponentFromSpecifier,
+	getIdFromSpecifier,
+	getParentConstructor,
+	isConstructor,
+	safeCall,
+} from "./utility";
 
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
@@ -95,7 +103,7 @@ export const Component = Modding.createMetaDecorator<[opts?: ComponentConfig]>("
 })
 export class Components implements OnInit, OnStart {
 	private components = new Map<Constructor, ComponentInfo>();
-	private classParentCache = new Map<Constructor, readonly Constructor[]>();
+	private classParentCache = new Map<AbstractConstructor, readonly AbstractConstructor[]>();
 
 	private activeComponents = new Map<Instance, Map<unknown, BaseComponent>>();
 	private activeInheritedComponents = new Map<Instance, Map<string, Set<BaseComponent>>>();
@@ -107,22 +115,25 @@ export class Components implements OnInit, OnStart {
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
 		const componentConstructors = Modding.getDecorators<typeof Component>();
-		for (const { object: ctor, arguments: args } of componentConstructors) {
-			const identifier = Reflect.getMetadata<string>(ctor, "identifier")!;
+		for (const { constructor: ctor, arguments: args } of componentConstructors) {
+			if (ctor === undefined) {
+				continue;
+			}
 
+			const identifier = Reflect.getMetadata<string>(ctor, "identifier")!;
 			const componentDependencies = new Array<Constructor>();
 			const parameters = Reflect.getMetadata<string[]>(ctor, "flamework:parameters");
 			if (parameters) {
 				for (const dependency of parameters) {
 					const object = Reflect.idToObj.get(dependency);
-					if (!object) continue;
+					if (!object || !isConstructor(object)) continue;
 					if (!Modding.getDecorator<typeof Component>(object)) continue;
 
 					componentDependencies.push(object as Constructor);
 				}
 			}
 
-			components.set(ctor as Constructor, {
+			components.set(ctor, {
 				ctor: ctor as Constructor<BaseComponent>,
 				config: args[0] || {},
 				componentDependencies,
@@ -133,7 +144,7 @@ export class Components implements OnInit, OnStart {
 	}
 
 	onStart() {
-		for (const [, { config, ctor, identifier }] of this.components) {
+		for (const [, { config, ctor }] of this.components) {
 			const ancestorBlacklist = config.ancestorBlacklist ?? DEFAULT_ANCESTOR_BLACKLIST;
 			const ancestorWhitelist = config.ancestorWhitelist;
 
@@ -208,12 +219,12 @@ export class Components implements OnInit, OnStart {
 		return tracker;
 	}
 
-	private getOrderedParents(ctor: Constructor, omitBaseComponent = true) {
+	private getOrderedParents(ctor: AbstractConstructor, omitBaseComponent = true) {
 		const cache = this.classParentCache.get(ctor);
 		if (cache) return cache;
 
 		const classes = [ctor];
-		let nextParent: Constructor | undefined = ctor;
+		let nextParent: AbstractConstructor | undefined = ctor;
 		while ((nextParent = getParentConstructor(nextParent)) !== undefined) {
 			if (!omitBaseComponent || nextParent !== BaseComponent) {
 				classes.push(nextParent);
@@ -224,18 +235,18 @@ export class Components implements OnInit, OnStart {
 		return classes;
 	}
 
-	private getAttributeGuards(ctor: Constructor) {
+	private getAttributeGuards(ctor: AbstractConstructor) {
 		const attributes = new Map<string, t.check<unknown>>();
-		const metadata = this.components.get(ctor);
+		const metadata = this.components.get(ctor as Constructor);
 		if (metadata) {
 			if (metadata.config.attributes !== undefined) {
 				for (const [attribute, guard] of pairs(metadata.config.attributes)) {
 					attributes.set(attribute as string, guard);
 				}
 			}
-			const parentCtor = getmetatable(ctor) as { __index?: Constructor };
+			const parentCtor = getmetatable(ctor) as { __index?: AbstractConstructor };
 			if (parentCtor.__index !== undefined) {
-				for (const [attribute, guard] of this.getAttributeGuards(parentCtor.__index as Constructor)) {
+				for (const [attribute, guard] of this.getAttributeGuards(parentCtor.__index)) {
 					if (!attributes.has(attribute)) {
 						attributes.set(attribute, guard);
 					}
@@ -267,13 +278,13 @@ export class Components implements OnInit, OnStart {
 		return newAttributes;
 	}
 
-	private getConfigValue<T extends keyof ComponentConfig>(ctor: Constructor, key: T): ComponentConfig[T] {
-		const metadata = this.components.get(ctor);
+	private getConfigValue<T extends keyof ComponentConfig>(ctor: AbstractConstructor, key: T): ComponentConfig[T] {
+		const metadata = this.components.get(ctor as Constructor);
 		if (metadata) {
 			if (metadata.config[key] !== undefined) {
 				return metadata.config[key];
 			}
-			const parentCtor = getmetatable(ctor) as { __index?: Constructor };
+			const parentCtor = getmetatable(ctor) as { __index?: AbstractConstructor };
 			if (parentCtor.__index !== undefined) {
 				return this.getConfigValue(parentCtor.__index, key);
 			}
@@ -393,8 +404,8 @@ export class Components implements OnInit, OnStart {
 		return {
 			handle: (id: string) => {
 				const ctor = Reflect.idToObj.get(id);
-				if (ctor && Modding.getDecorator<typeof Component>(ctor)) {
-					const component = this.getComponent(instance, ctor as Constructor);
+				if (ctor && isConstructor(ctor) && Modding.getDecorator<typeof Component>(ctor)) {
+					const component = this.getComponent(instance, ctor);
 					if (component === undefined) {
 						const name = instance.GetFullName();
 						throw `Could not resolve component '${id}' while constructing '${componentInfo.identifier}' (${name})`;
@@ -411,7 +422,7 @@ export class Components implements OnInit, OnStart {
 	 * The specified type must be exact and not a lifecycle event or superclass. If you want to
 	 * query for lifecycle events or superclasses, you should use the `getComponents` method.
 	 */
-	getComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T | undefined {
+	getComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string): T | undefined {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -433,7 +444,7 @@ export class Components implements OnInit, OnStart {
 	 *
 	 * For example, `getComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
 	 */
-	getComponents<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T[] {
+	getComponents<T extends object>(instance: Instance, componentSpecifier?: AbstractConstructor<T> | string): T[] {
 		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
@@ -513,7 +524,7 @@ export class Components implements OnInit, OnStart {
 	 * Removes the specified component from this instance.
 	 * The specified class must be exact and cannot be a lifecycle event or superclass.
 	 */
-	removeComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
+	removeComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -550,7 +561,7 @@ export class Components implements OnInit, OnStart {
 	 *
 	 * For example, `getAllComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
 	 */
-	getAllComponents<T>(componentSpecifier?: Constructor<T> | string): T[] {
+	getAllComponents<T extends object>(componentSpecifier?: AbstractConstructor<T> | string): T[] {
 		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
@@ -567,7 +578,7 @@ export class Components implements OnInit, OnStart {
 	 *
 	 * This only fires once and should be cancelled to avoid memory leaks if the Promise is discarded prior to being invoked.
 	 */
-	waitForComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): Promise<T> {
+	waitForComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string): Promise<T> {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
