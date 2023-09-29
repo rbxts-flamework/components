@@ -1,6 +1,12 @@
 import { CollectionService } from "@rbxts/services";
 import { t } from "@rbxts/t";
 
+const ATOMIC_MODES = new Set<Enum.ModelStreamingMode>([
+	Enum.ModelStreamingMode.Atomic,
+	Enum.ModelStreamingMode.Persistent,
+	Enum.ModelStreamingMode.PersistentPerPlayer,
+]);
+
 type Listener = (isQualified: boolean, instance: Instance) => void;
 
 interface InstanceTracker {
@@ -15,6 +21,7 @@ export interface Criteria {
 	tag?: string;
 	typeGuard?: t.check<unknown>;
 	typeGuardPoll?: boolean;
+	typeGuardPollAtomic?: boolean;
 	dependencies?: ComponentTracker[];
 	warningTimeout?: number;
 }
@@ -58,9 +65,10 @@ export class ComponentTracker {
 	}
 
 	private setupTracker(instance: Instance, tracker: InstanceTracker) {
-		const { typeGuard, typeGuardPoll, dependencies } = this.criteria;
+		const { typeGuard, typeGuardPoll, typeGuardPollAtomic, dependencies } = this.criteria;
 
-		if (typeGuard && typeGuardPoll) {
+		const isAtomicModel = instance.IsA("Model") && ATOMIC_MODES.has(instance.ModelStreamingMode);
+		if (typeGuard && typeGuardPoll && (typeGuardPollAtomic || !isAtomicModel)) {
 			let addedConnection: RBXScriptConnection | undefined;
 			let removingConnection: RBXScriptConnection | undefined;
 

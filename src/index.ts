@@ -1,2 +1,2 @@
 export { BaseComponent } from "./baseComponent";
-export { Components, ComponentConfig, Component } from "./components";
+export { Components, ComponentConfig, ComponentStreamingMode, Component } from "./components";
