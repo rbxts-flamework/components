@@ -20,6 +20,37 @@ interface ComponentInfo {
 	config: ComponentConfig;
 }
 
+/**
+ * This enum dictates how component instance guards interact with StreamingEnabled.
+ */
+export enum ComponentStreamingMode {
+	/**
+	 * This disables instance guard streaming, and will only run the instance guard once.
+	 */
+	Disabled,
+
+	/**
+	 * This will watch for any changes to the instance tree, and rerun the instance guards.
+	 */
+	Watching,
+
+	/**
+	 * This determines the appropriate streaming mode based on a couple of factors.
+	 *
+	 * If on the server, this will always behave like `Disabled`.
+	 *
+	 * If on the client, and the attached instance is an `Atomic` model, this will behave like `Disabled`.
+	 *
+	 * Otherwise, this behaves like `Watching`.
+	 */
+	Contextual,
+
+	/**
+	 * This is equivalent to {@link ComponentStreamingMode.Contextual Contextual}.
+	 */
+	Default = Contextual,
+}
+
 export interface ComponentConfig {
 	/**
 	 * The CollectionService tag this component is associated with.
@@ -80,6 +111,11 @@ export interface ComponentConfig {
 	 * Defaults to 5, set to 0 to disable.
 	 */
 	warningTimeout?: number;
+
+	/**
+	 * Override the component streaming mode, defaults to `Contextual`.
+	 */
+	streamingMode?: ComponentStreamingMode;
 }
 
 const DEFAULT_ANCESTOR_BLACKLIST = [ServerStorage, ReplicatedStorage];
@@ -207,10 +243,14 @@ export class Components implements OnInit, OnStart {
 			dependencies.push(this.getComponentTracker(dependency));
 		}
 
+		const streamingMode = componentInfo.config.streamingMode ?? ComponentStreamingMode.Default;
 		const tracker = new ComponentTracker(componentInfo.identifier, {
 			tag: componentInfo.config.tag,
 			typeGuard: instanceGuard,
-			typeGuardPoll: RunService.IsClient(),
+			typeGuardPoll:
+				(streamingMode === ComponentStreamingMode.Contextual && RunService.IsClient()) ||
+				streamingMode === ComponentStreamingMode.Watching,
+			typeGuardPollAtomic: streamingMode !== ComponentStreamingMode.Contextual,
 			warningTimeout: componentInfo.config.warningTimeout,
 			dependencies,
 		});
