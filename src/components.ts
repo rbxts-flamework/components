@@ -161,7 +161,7 @@ export class Components implements OnInit, OnStart {
 			const parameters = Reflect.getMetadata<string[]>(ctor, "flamework:parameters");
 			if (parameters) {
 				for (const dependency of parameters) {
-					const object = Reflect.idToObj.get(dependency);
+					const object = Modding.getObjectFromId(dependency);
 					if (!object || !isConstructor(object)) continue;
 					if (!Modding.getDecorator<typeof Component>(object)) continue;
 
@@ -443,7 +443,7 @@ export class Components implements OnInit, OnStart {
 
 		return {
 			handle: (id: string) => {
-				const ctor = Reflect.idToObj.get(id);
+				const ctor = Modding.getObjectFromId(id);
 				if (ctor && isConstructor(ctor) && Modding.getDecorator<typeof Component>(ctor)) {
 					const component = this.getComponent(instance, ctor);
 					if (component === undefined) {

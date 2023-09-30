@@ -1,4 +1,4 @@
-import { Reflect } from "@flamework/core";
+import { Modding, Reflect } from "@flamework/core";
 
 export type Constructor<T = object> = new (...args: never[]) => T;
 export type AbstractConstructor<T = object> = abstract new (...args: never[]) => T;
@@ -32,7 +32,9 @@ export function safeCall(message: unknown[], func: () => void, printStack = true
 }
 
 export function getComponentFromSpecifier<T extends AbstractConstructor>(componentSpecifier?: T | string) {
-	return typeIs(componentSpecifier, "string") ? (Reflect.idToObj.get(componentSpecifier) as T) : componentSpecifier;
+	return typeIs(componentSpecifier, "string")
+		? (Modding.getObjectFromId(componentSpecifier) as T)
+		: componentSpecifier;
 }
 
 export function getIdFromSpecifier<T extends AbstractConstructor>(componentSpecifier?: T | string) {
