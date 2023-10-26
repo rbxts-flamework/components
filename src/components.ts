@@ -5,7 +5,9 @@ import { BaseComponent, SYMBOL_ATTRIBUTE_HANDLERS } from "./baseComponent";
 import { ComponentTracker } from "./componentTracker";
 import {
 	AbstractConstructor,
+	AbstractConstructorRef,
 	Constructor,
+	ConstructorRef,
 	getComponentFromSpecifier,
 	getIdFromSpecifier,
 	getParentConstructor,
@@ -461,8 +463,10 @@ export class Components implements OnInit, OnStart {
 	 *
 	 * The specified type must be exact and not a lifecycle event or superclass. If you want to
 	 * query for lifecycle events or superclasses, you should use the `getComponents` method.
+	 *
+	 * @metadata macro
 	 */
-	getComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string): T | undefined {
+	getComponent<T extends object>(instance: Instance, componentSpecifier?: ConstructorRef<T>): T | undefined {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -483,8 +487,10 @@ export class Components implements OnInit, OnStart {
 	 * This returns all components associated with the instance that extend or implement the specified type.
 	 *
 	 * For example, `getComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
+	 *
+	 * @metadata macro
 	 */
-	getComponents<T extends object>(instance: Instance, componentSpecifier?: AbstractConstructor<T> | string): T[] {
+	getComponents<T extends object>(instance: Instance, componentSpecifier?: AbstractConstructorRef<T>): T[] {
 		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
@@ -503,8 +509,10 @@ export class Components implements OnInit, OnStart {
 	/**
 	 * Adds the specified component to the instance.
 	 * The specified class must be exact and cannot be a lifecycle event or superclass.
+	 *
+	 * @metadata macro
 	 */
-	addComponent<T>(instance: Instance, componentSpecifier?: Constructor<T> | string): T;
+	addComponent<T>(instance: Instance, componentSpecifier?: ConstructorRef<T>): T;
 	addComponent<T extends BaseComponent>(
 		instance: Instance,
 		componentSpecifier?: Constructor<T> | string,
@@ -563,8 +571,10 @@ export class Components implements OnInit, OnStart {
 	/**
 	 * Removes the specified component from this instance.
 	 * The specified class must be exact and cannot be a lifecycle event or superclass.
+	 *
+	 * @metadata macro
 	 */
-	removeComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string) {
+	removeComponent<T extends object>(instance: Instance, componentSpecifier?: ConstructorRef<T>) {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
@@ -600,8 +610,10 @@ export class Components implements OnInit, OnStart {
 	 * This returns all components, across all instances, which extend or implement the specified type.
 	 *
 	 * For example, `getAllComponents<OnTick>` will retrieve all components that subscribe to the OnTick lifecycle event.
+	 *
+	 * @metadata macro
 	 */
-	getAllComponents<T extends object>(componentSpecifier?: AbstractConstructor<T> | string): T[] {
+	getAllComponents<T extends object>(componentSpecifier?: AbstractConstructorRef<T>): T[] {
 		const componentIdentifier = getIdFromSpecifier(componentSpecifier);
 		if (componentIdentifier === undefined) return [];
 
@@ -617,8 +629,10 @@ export class Components implements OnInit, OnStart {
 	 * have the eager loading capabilities of `getComponent`.
 	 *
 	 * This only fires once and should be cancelled to avoid memory leaks if the Promise is discarded prior to being invoked.
+	 *
+	 * @metadata macro
 	 */
-	waitForComponent<T extends object>(instance: Instance, componentSpecifier?: Constructor<T> | string): Promise<T> {
+	waitForComponent<T extends object>(instance: Instance, componentSpecifier?: ConstructorRef<T>): Promise<T> {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
