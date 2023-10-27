@@ -32,19 +32,23 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 
 	/**
 	 * Attributes attached to this instance.
+	 *
+	 * @metadata intrinsic-component-attributes
 	 */
 	public attributes!: A;
 
 	/**
 	 * The instance this component is attached to.
 	 * This should only be called in a component lifecycle event.
+	 *
+	 * @metadata intrinsic-component-instance
 	 */
 	public instance!: I;
 
 	/** @hidden @deprecated */
 	public [SYMBOL_ATTRIBUTE_SETTER]<T extends keyof A>(key: T, value: A[T], postfix?: boolean) {
-		const previousValue = this.attributes[key];
-		this.attributes[key] = value;
+		const previousValue = (this.attributes as A)[key];
+		(this.attributes as A)[key] = value;
 		this.instance.SetAttribute(key as string, value as never);
 		return postfix ? previousValue : value;
 	}

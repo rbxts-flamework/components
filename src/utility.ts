@@ -3,6 +3,9 @@ import { Modding, Reflect } from "@flamework/core";
 export type Constructor<T = object> = new (...args: never[]) => T;
 export type AbstractConstructor<T = object> = abstract new (...args: never[]) => T;
 
+export type ConstructorRef<T> = Constructor<T> | Modding.Generic<T, "id"> | string;
+export type AbstractConstructorRef<T> = AbstractConstructor<T> | Modding.Generic<T, "id"> | string;
+
 export function isConstructor(obj: object): obj is Constructor {
 	return "constructor" in obj && "new" in obj;
 }
@@ -31,10 +34,10 @@ export function safeCall(message: unknown[], func: () => void, printStack = true
 	});
 }
 
-export function getComponentFromSpecifier<T extends AbstractConstructor>(componentSpecifier?: T | string) {
+export function getComponentFromSpecifier<T extends AbstractConstructorRef<unknown>>(componentSpecifier?: T) {
 	return typeIs(componentSpecifier, "string")
-		? (Modding.getObjectFromId(componentSpecifier) as T)
-		: componentSpecifier;
+		? (Modding.getObjectFromId(componentSpecifier) as Extract<T, AbstractConstructor>)
+		: (componentSpecifier as Extract<T, AbstractConstructor>);
 }
 
 export function getIdFromSpecifier<T extends AbstractConstructor>(componentSpecifier?: T | string) {
