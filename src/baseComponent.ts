@@ -32,12 +32,16 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 
 	/**
 	 * Attributes attached to this instance.
+	 *
+	 * @metadata intrinsic-component-attributes
 	 */
 	public attributes!: A;
 
 	/**
 	 * The instance this component is attached to.
 	 * This should only be called in a component lifecycle event.
+	 *
+	 * @metadata intrinsic-component-instance
 	 */
 	public instance!: I;
 
