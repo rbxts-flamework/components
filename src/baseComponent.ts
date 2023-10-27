@@ -47,8 +47,8 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 
 	/** @hidden @deprecated */
 	public [SYMBOL_ATTRIBUTE_SETTER]<T extends keyof A>(key: T, value: A[T], postfix?: boolean) {
-		const previousValue = this.attributes[key];
-		this.attributes[key] = value;
+		const previousValue = (this.attributes as A)[key];
+		(this.attributes as A)[key] = value;
 		this.instance.SetAttribute(key as string, value as never);
 		return postfix ? previousValue : value;
 	}
