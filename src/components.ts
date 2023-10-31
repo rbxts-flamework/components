@@ -1,5 +1,14 @@
 import { Controller, Flamework, Modding, OnInit, OnStart, Reflect, Service } from "@flamework/core";
-import { CollectionService, ReplicatedStorage, RunService, ServerStorage } from "@rbxts/services";
+import {
+	CollectionService,
+	ReplicatedStorage,
+	RunService,
+	ServerScriptService,
+	ServerStorage,
+	StarterGui,
+	StarterPack,
+	StarterPlayer,
+} from "@rbxts/services";
 import { t } from "@rbxts/t";
 import { BaseComponent, SYMBOL_ATTRIBUTE_HANDLERS } from "./baseComponent";
 import { ComponentTracker } from "./componentTracker";
@@ -120,7 +129,7 @@ export interface ComponentConfig {
 	streamingMode?: ComponentStreamingMode;
 }
 
-const DEFAULT_ANCESTOR_BLACKLIST = [ServerStorage, ReplicatedStorage];
+const DEFAULT_ANCESTOR_BLACKLIST = [ServerStorage, ReplicatedStorage, StarterPack, StarterGui, StarterPlayer];
 
 /**
  * Register a class as a Component.
