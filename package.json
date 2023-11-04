@@ -19,6 +19,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "peerDependencies": {
+    "@flamework/core": "*"
+  },
   "devDependencies": {
     "@rbxts/compiler-types": "^2.2.0-types.0",
     "@rbxts/types": "^1.0.662",
@@ -33,7 +36,6 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "@flamework/core": "^1.0.0-beta.4",
     "@rbxts/maid": "^1.0.0-ts.1",
     "@rbxts/services": "^1.1.5",
     "@rbxts/signal": "^1.0.3",
