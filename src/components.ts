@@ -374,8 +374,8 @@ export class Components implements OnInit, OnStart {
 							const value = instance.GetAttribute(attribute);
 							const attributes = component.attributes as Map<string, unknown>;
 							if (guard(value)) {
-								signal?.Fire(value, attributeCache.get(attribute));
 								attributes.set(attribute, value);
+								signal?.Fire(value, attributeCache.get(attribute));
 								attributeCache.set(attribute, value);
 							}
 						}),
