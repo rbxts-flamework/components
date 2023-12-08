@@ -23,6 +23,7 @@ import {
 	isConstructor,
 	safeCall,
 } from "./utility";
+import Maid from "@rbxts/maid";
 
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
@@ -158,6 +159,7 @@ export class Components implements OnInit, OnStart {
 
 	private trackers = new Map<Constructor, ComponentTracker>();
 	private componentWaiters = new Map<Instance, Map<Constructor, Set<(value: unknown) => void>>>();
+	private componentCleanup = new Map<BaseComponent, Maid>();
 
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
@@ -360,7 +362,11 @@ export class Components implements OnInit, OnStart {
 		}
 
 		Modding.addListener(component);
-		component.maid.GiveTask(() => Modding.removeListener(component));
+
+		const maid = new Maid();
+		this.componentCleanup.set(component, maid);
+
+		maid.GiveTask(() => Modding.removeListener(component));
 
 		const refreshAttributes = this.getConfigValue(ctor, "refreshAttributes");
 		if (refreshAttributes === undefined || refreshAttributes) {
@@ -368,7 +374,7 @@ export class Components implements OnInit, OnStart {
 			const attributeGuards = this.getAttributeGuards(ctor);
 			for (const [attribute, guard] of pairs(attributeGuards)) {
 				if (typeIs(attribute, "string")) {
-					component.maid.GiveTask(
+					maid.GiveTask(
 						instance.GetAttributeChangedSignal(attribute).Connect(() => {
 							const signal = component[SYMBOL_ATTRIBUTE_HANDLERS].get(attribute);
 							const value = instance.GetAttribute(attribute);
@@ -612,6 +618,13 @@ export class Components implements OnInit, OnStart {
 
 		if (activeComponents.size() === 0) {
 			this.activeComponents.delete(instance);
+		}
+
+		const maid = this.componentCleanup.get(existingComponent);
+		this.componentCleanup.delete(existingComponent);
+
+		if (maid !== undefined) {
+			maid.Destroy();
 		}
 	}
 
