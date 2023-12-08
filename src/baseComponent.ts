@@ -26,11 +26,6 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	}
 
 	/**
-	 * A maid that will be destroyed when the component is.
-	 */
-	public maid = new Maid();
-
-	/**
 	 * Attributes attached to this instance.
 	 *
 	 * @metadata intrinsic-component-attributes
@@ -72,7 +67,6 @@ export class BaseComponent<A = {}, I extends Instance = Instance> {
 	 * Destroys this component instance.
 	 */
 	destroy() {
-		this.maid.Destroy();
 		for (const [, changeHandler] of this[SYMBOL_ATTRIBUTE_HANDLERS]) {
 			changeHandler.Destroy();
 		}
