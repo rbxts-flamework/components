@@ -24,12 +24,14 @@ import {
 	safeCall,
 } from "./utility";
 import Maid from "@rbxts/maid";
+import Signal from "@rbxts/signal";
 
 interface ComponentInfo {
 	ctor: Constructor<BaseComponent>;
 	componentDependencies: Constructor[];
 	identifier: string;
 	config: ComponentConfig;
+	polymorphicIds: string[];
 }
 
 /**
@@ -161,6 +163,9 @@ export class Components implements OnInit, OnStart {
 	private componentWaiters = new Map<Instance, Map<Constructor, Set<(value: unknown) => void>>>();
 	private componentCleanup = new Map<BaseComponent, Maid>();
 
+	private componentAddedListeners = new Map<string, Signal<(value: never, instance: Instance) => void>>();
+	private componentRemovedListeners = new Map<string, Signal<(value: never, instance: Instance) => void>>();
+
 	onInit() {
 		const components = new Map<Constructor, ComponentInfo>();
 		const componentConstructors = Modding.getDecorators<typeof Component>();
@@ -185,6 +190,7 @@ export class Components implements OnInit, OnStart {
 			components.set(ctor, {
 				ctor: ctor as Constructor<BaseComponent>,
 				config: args[0] || {},
+				polymorphicIds: this.getPolymorphicIds(ctor),
 				componentDependencies,
 				identifier,
 			});
@@ -473,6 +479,26 @@ export class Components implements OnInit, OnStart {
 		};
 	}
 
+	private getPolymorphicIds(component: AbstractConstructor) {
+		const ids = new Array<string>();
+
+		for (const parentClass of this.getOrderedParents(component)) {
+			const parentId = Reflect.getOwnMetadata<string>(parentClass, "identifier");
+			if (parentId === undefined) continue;
+
+			ids.push(parentId);
+		}
+
+		const implementedList = Reflect.getMetadatas<string[]>(component, "flamework:implements");
+		for (const implemented of implementedList) {
+			for (const id of implemented) {
+				ids.push(id);
+			}
+		}
+
+		return ids;
+	}
+
 	/**
 	 * This returns the specified component associated with the instance.
 	 *
@@ -565,21 +591,19 @@ export class Components implements OnInit, OnStart {
 		const [componentInstance, construct] = Modding.createDeferredDependency(component, resolutionOptions);
 		activeComponents.set(component, componentInstance);
 
-		for (const parentClass of this.getOrderedParents(component)) {
-			const parentId = Reflect.getOwnMetadata<string>(parentClass, "identifier");
-			if (parentId === undefined) continue;
-
-			this.addIdMapping(componentInstance, parentId, inheritedComponents);
-		}
-
-		const implementedList = Reflect.getMetadatas<string[]>(component, "flamework:implements");
-		for (const implemented of implementedList) {
-			for (const id of implemented) {
-				this.addIdMapping(componentInstance, id, inheritedComponents);
-			}
+		for (const id of componentInfo.polymorphicIds) {
+			this.addIdMapping(componentInstance, id, inheritedComponents);
 		}
 
 		this.setupComponent(instance, attributes, componentInstance, construct, componentInfo);
+
+		for (const id of componentInfo.polymorphicIds) {
+			const signal = this.componentAddedListeners.get(id);
+			if (signal) {
+				signal.Fire(componentInstance as never, instance);
+			}
+		}
+
 		return componentInstance;
 	}
 
@@ -593,27 +617,27 @@ export class Components implements OnInit, OnStart {
 		const component = getComponentFromSpecifier(componentSpecifier);
 		assert(component, `Could not find component from specifier: ${componentSpecifier}`);
 
+		const componentInfo = this.components.get(component);
+		assert(componentInfo, "Provided componentSpecifier does not exist");
+
 		const activeComponents = this.activeComponents.get(instance);
 		if (!activeComponents) return;
 
 		const existingComponent = activeComponents.get(component);
 		if (!existingComponent) return;
 
+		for (const id of componentInfo.polymorphicIds) {
+			const signal = this.componentRemovedListeners.get(id);
+			if (signal) {
+				signal.Fire(existingComponent as never, instance);
+			}
+		}
+
 		existingComponent.destroy();
 		activeComponents.delete(component);
 
-		for (const parentClass of this.getOrderedParents(component)) {
-			const parentId = Reflect.getOwnMetadata<string>(parentClass, "identifier");
-			if (parentId === undefined) continue;
-
-			this.removeIdMapping(instance, existingComponent, parentId);
-		}
-
-		const implementedList = Reflect.getMetadatas<string[]>(component, "flamework:implements");
-		for (const implemented of implementedList) {
-			for (const id of implemented) {
-				this.removeIdMapping(instance, existingComponent, id);
-			}
+		for (const id of componentInfo.polymorphicIds) {
+			this.removeIdMapping(instance, existingComponent, id);
 		}
 
 		if (activeComponents.size() === 0) {
@@ -682,5 +706,46 @@ export class Components implements OnInit, OnStart {
 
 			componentWaiters.add(resolve as never);
 		});
+	}
+
+	/**
+	 * This function listens for the specified component type to be added to any instance.
+	 *
+	 * This function also supports polymorphism, which means you can listen for specific interfaces or superclasses.
+	 *
+	 * @metadata macro
+	 */
+	onComponentAdded<T extends object>(
+		callback: (value: T, instance: Instance) => void,
+		componentSpecifier?: AbstractConstructorRef<T>,
+	) {
+		const componentId = getIdFromSpecifier(componentSpecifier);
+		assert(componentId !== undefined);
+
+		let signal = this.componentAddedListeners.get(componentId);
+		if (!signal) this.componentAddedListeners.set(componentId, (signal = new Signal()));
+
+		return signal.Connect(callback);
+	}
+
+	/**
+	 * This function listens for the specified component type to be removed from any instance.
+	 * The callback is invoked before the component's `destroy` method is called.
+	 *
+	 * This function also supports polymorphism, which means you can listen for specific interfaces or superclasses.
+	 *
+	 * @metadata macro
+	 */
+	onComponentRemoved<T extends object>(
+		callback: (value: T, instance: Instance) => void,
+		componentSpecifier?: AbstractConstructorRef<T>,
+	) {
+		const componentId = getIdFromSpecifier(componentSpecifier);
+		assert(componentId !== undefined);
+
+		let signal = this.componentRemovedListeners.get(componentId);
+		if (!signal) this.componentRemovedListeners.set(componentId, (signal = new Signal()));
+
+		return signal.Connect(callback);
 	}
 }
