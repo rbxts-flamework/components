@@ -158,6 +158,7 @@ export class Components implements OnInit, OnStart {
 	private activeComponents = new Map<Instance, Map<unknown, BaseComponent>>();
 	private activeInheritedComponents = new Map<Instance, Map<string, Set<BaseComponent>>>();
 	private reverseComponentsMapping = new Map<string, Set<BaseComponent>>();
+	private componentConstructing = new Set<unknown>();
 
 	private trackers = new Map<Constructor, ComponentTracker>();
 	private componentWaiters = new Map<Instance, Map<Constructor, Set<(value: unknown) => void>>>();
@@ -521,6 +522,11 @@ export class Components implements OnInit, OnStart {
 		if (activeComponents) {
 			const activeComponent = activeComponents.get(component);
 			if (activeComponent) {
+				// The component is still being constructed.
+				if (this.componentConstructing.has(activeComponent)) {
+					return undefined;
+				}
+
 				return activeComponent as T;
 			}
 		}
@@ -591,19 +597,26 @@ export class Components implements OnInit, OnStart {
 		if (!inheritedComponents) this.activeInheritedComponents.set(instance, (inheritedComponents = new Map()));
 
 		const existingComponent = activeComponents.get(component);
-		if (existingComponent !== undefined) return existingComponent;
+		if (existingComponent !== undefined) {
+			// The component has already been added, but is still being constructed.
+			if (this.componentConstructing.has(existingComponent)) {
+				error("component is cyclic, attempted to construct component while it is already being constructed.");
+			}
+
+			return existingComponent;
+		}
 
 		const resolutionOptions = this.getDependencyResolutionOptions(componentInfo, instance);
 		const [componentInstance, construct] = Modding.createDeferredDependency(component, resolutionOptions);
+		this.componentConstructing.add(componentInstance);
 		activeComponents.set(component, componentInstance);
+
+		this.setupComponent(instance, attributes, componentInstance, construct, componentInfo);
+		this.componentConstructing.delete(componentInstance);
 
 		for (const id of componentInfo.polymorphicIds) {
 			this.addIdMapping(componentInstance, id, inheritedComponents);
-		}
 
-		this.setupComponent(instance, attributes, componentInstance, construct, componentInfo);
-
-		for (const id of componentInfo.polymorphicIds) {
 			const signal = this.componentAddedListeners.get(id);
 			if (signal) {
 				signal.Fire(componentInstance as never, instance);
