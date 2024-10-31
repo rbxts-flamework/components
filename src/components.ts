@@ -450,7 +450,13 @@ export class Components implements OnInit, OnStart {
 
 	private canCreateComponentEager(instance: Instance, component: Constructor) {
 		const componentInfo = this.components.get(component);
-		if (!componentInfo) return false;
+		if (!componentInfo) {
+			return false;
+		}
+
+		if (componentInfo.config.predicate && !componentInfo.config.predicate(instance)) {
+			return false;
+		}
 
 		const tag = componentInfo.config.tag;
 		if (tag !== undefined && instance.Parent && CollectionService.HasTag(instance, tag)) {
