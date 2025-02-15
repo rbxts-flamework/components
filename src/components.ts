@@ -238,13 +238,15 @@ export class Components implements OnInit, OnStart {
 					this.removeComponent(instance, ctor);
 				});
 
-				for (const instance of CollectionService.GetTagged(config.tag)) {
-					safeCall(
-						[`[Flamework] Failed to instantiate '${ctor}' for`, instance, `[${instance.GetFullName()}]`],
-						() => instanceAdded(instance),
-						false,
-					);
-				}
+				task.spawn(() => {
+					for (const instance of CollectionService.GetTagged(config.tag)) {
+						safeCall(
+							[`[Flamework] Failed to instantiate '${ctor}' for`, instance, `[${instance.GetFullName()}]`],
+							() => instanceAdded(instance),
+							false,
+						);
+					}
+				});
 			}
 		}
 	}
