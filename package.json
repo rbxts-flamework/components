@@ -23,8 +23,8 @@
     "@flamework/core": "*"
   },
   "devDependencies": {
-    "@rbxts/compiler-types": "^2.2.0-types.0",
-    "@rbxts/types": "^1.0.662",
+    "@rbxts/compiler-types": "^3.0.0-types.0",
+    "@rbxts/types": "^1.0.846",
     "@typescript-eslint/eslint-plugin": "^6.7.4",
     "@typescript-eslint/parser": "^6.7.4",
     "eslint": "^7.31.0",
@@ -32,8 +32,8 @@
     "eslint-plugin-prettier": "^3.4.0",
     "eslint-plugin-roblox-ts": "^0.0.30",
     "prettier": "^2.3.2",
-    "roblox-ts": "^2.2.0",
-    "typescript": "^5.2.2"
+    "roblox-ts": "^3.0.0",
+    "typescript": "^5.5.3"
   },
   "dependencies": {
     "@rbxts/maid": "^1.0.0-ts.1",
